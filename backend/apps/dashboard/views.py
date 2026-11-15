@@ -3,6 +3,7 @@ import datetime
 from django.core.cache import cache
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncMonth
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -18,7 +19,7 @@ CACHE_TTL = 120
 
 
 def _months(n=12):
-    today = datetime.date.today().replace(day=1)
+    today = timezone.localdate().replace(day=1)
     out = []
     y, m = today.year, today.month
     for _ in range(n):
@@ -30,7 +31,7 @@ def _months(n=12):
 
 
 def compute_stats() -> dict:
-    today = datetime.date.today()
+    today = timezone.localdate()
     active = Asset.objects.exclude(status=Asset.Status.RETIRED)
     by_status = dict(Asset.objects.values_list("status").annotate(c=Count("id")).values_list("status", "c"))
     totals = active.aggregate(value=Sum("purchase_cost"), count=Count("id"))
@@ -155,8 +156,8 @@ def personal_stats(user) -> dict:
         "awaiting_signature": Handover.objects.filter(status=Handover.Status.PENDING, signer=user).count(),
         "my_by_status": dict(mine.values_list("status").annotate(c=Count("id")).values_list("status", "c")),
         "my_warranty_expiring": mine.filter(
-            Q(warranty_expiry__gte=datetime.date.today())
-            & Q(warranty_expiry__lte=datetime.date.today() + datetime.timedelta(days=30))
+            Q(warranty_expiry__gte=timezone.localdate())
+            & Q(warranty_expiry__lte=timezone.localdate() + datetime.timedelta(days=30))
         ).count(),
     }
 

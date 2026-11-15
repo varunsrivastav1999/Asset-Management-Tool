@@ -1,6 +1,7 @@
 import datetime
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserBriefSerializer
@@ -221,7 +222,7 @@ class AssetListSerializer(serializers.ModelSerializer):
     def get_warranty_days_left(self, obj) -> int | None:
         if not obj.warranty_expiry:
             return None
-        return (obj.warranty_expiry - datetime.date.today()).days
+        return (obj.warranty_expiry - timezone.localdate()).days
 
 
 class AssetDetailSerializer(AssetListSerializer):
@@ -331,12 +332,12 @@ class AssetWriteSerializer(serializers.ModelSerializer):
         warranty = attrs.get("warranty_expiry", getattr(self.instance, "warranty_expiry", None))
         if purchase and warranty and warranty < purchase:
             raise serializers.ValidationError({"warranty_expiry": "Warranty cannot expire before the purchase date."})
-        if purchase and purchase > datetime.date.today():
+        if purchase and purchase > timezone.localdate():
             raise serializers.ValidationError({"purchase_date": "Purchase date cannot be in the future."})
         interval = attrs.get("maintenance_interval_days", getattr(self.instance, "maintenance_interval_days", None))
         next_due = attrs.get("next_maintenance_date", getattr(self.instance, "next_maintenance_date", None))
         if interval and not next_due:
-            attrs["next_maintenance_date"] = datetime.date.today() + datetime.timedelta(days=interval)
+            attrs["next_maintenance_date"] = timezone.localdate() + datetime.timedelta(days=interval)
         return attrs
 
 

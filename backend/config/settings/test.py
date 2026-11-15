@@ -7,7 +7,7 @@ from .base import env
 DEBUG = False
 SECRET_KEY = "test-secret-key-not-for-production-use-0123456789"
 SIMPLE_JWT["SIGNING_KEY"] = SECRET_KEY  # noqa: F405
-ALLOWED_HOSTS = ["*"]
+TRUSTED_HOSTS = ["*"]
 DATABASES = {"default": env.db("DATABASE_URL", default="postgres://localhost/asset_test")}
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}

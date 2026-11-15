@@ -14,6 +14,7 @@ from django.db.models import Count, Q
 from django.utils import timezone
 
 from apps.core.files import private_storage
+from apps.core.hosts import frontend_url
 from apps.core.permissions import is_manager
 
 from .models import ContactSettings, NotificationPreference, ReminderLog, ReminderRule
@@ -99,28 +100,19 @@ def _asset_ctx(a, today, due=None) -> dict:
 
 def section_queryset(section):
     """Live rows behind a sidebar section, used by custom-date triggers, counts and exports."""
-    from django.apps import apps
+    from apps.navigation.tables import model_for
 
     table = getattr(section, "table", "") if section else ""
     if table == "custom":
         from apps.navigation.models import TableRecord
 
         return TableRecord.objects.filter(definition__sidebar_item=section, is_archived=False)
-    model = {
-        "assets": "assets.Asset",
-        "receipts": "workflows.GoodsReceipt",
-        "handovers": "workflows.Handover",
-        "maintenance": "maintenance.MaintenanceRecord",
-        "users": "accounts.User",
-        "departments": "accounts.Department",
-        "locations": "assets.Location",
-        "vendors": "assets.Vendor",
-    }.get(table)
-    if not model:
+    model = model_for(table)
+    if model is None:
         from apps.assets.models import Asset
 
         return Asset.objects.none()
-    qs = apps.get_model(model).objects.all()
+    qs = model.objects.all()
     if table == "receipts":
         qs = qs.annotate(asset_count=Count("assets", distinct=True))
     if table == "handovers":
@@ -128,200 +120,208 @@ def section_queryset(section):
     return qs
 
 
-def events_for(rule: ReminderRule, now: datetime.datetime | None = None) -> list[Event]:
-    from apps.assets.models import Asset, AssetEvent, Category
-    from apps.workflows.models import GoodsReceipt, Handover
+@dataclass
+class TriggerContext:
+    """Everything a trigger handler needs to find the events that are due for one rule run."""
 
-    now = now or timezone.now()
-    today = now.astimezone(_tz((rule.schedule or {}).get("timezone"))).date()
-    cfg = rule.trigger_config or {}
-    base = settings.FRONTEND_URL
-    since = rule.last_run_at or (now - datetime.timedelta(days=1))
-    out: list[Event] = []
+    rule: ReminderRule
+    now: datetime.datetime
+    today: datetime.date
+    since: datetime.datetime
+    base: str
 
-    def days_list(default):
-        raw = cfg.get("days", default)
+    @property
+    def cfg(self) -> dict:
+        return self.rule.trigger_config or {}
+
+    def days(self, default: list[int]) -> list[int]:
+        raw = self.cfg.get("days", default)
         raw = raw if isinstance(raw, list) else [raw]
         return sorted({int(d) for d in raw if str(d).lstrip("-").isdigit()})
 
-    if rule.trigger == R.WARRANTY_EXPIRY:
-        for d in days_list([30, 7, 1]):
-            due = today + datetime.timedelta(days=d)
-            for a in (
-                Asset.objects.filter(warranty_expiry=due)
-                .exclude(status__in=["retired", "lost"])
-                .select_related("assigned_to", "department", "category")
-            ):
-                out.append(
-                    Event(
-                        f"asset:{a.pk}",
-                        f"{due.isoformat()}:d{d}",
-                        _asset_ctx(a, today, due),
-                        f"{base}/assets/{a.pk}",
-                        a.assigned_to,
-                        a.department,
-                        a,
-                        [a],
-                    )
-                )
-    elif rule.trigger == R.MAINTENANCE_DUE:
-        for d in days_list([7]):
-            due = today + datetime.timedelta(days=d)
-            for a in (
-                Asset.objects.filter(next_maintenance_date=due)
-                .exclude(status__in=["retired", "lost"])
-                .select_related("assigned_to", "department", "category")
-            ):
-                out.append(
-                    Event(
-                        f"asset:{a.pk}",
-                        f"{due.isoformat()}:d{d}",
-                        _asset_ctx(a, today, due),
-                        f"{base}/assets/{a.pk}",
-                        a.assigned_to,
-                        a.department,
-                        a,
-                        [a],
-                    )
-                )
-    elif rule.trigger == R.OVERDUE_RETURN:
-        qs = Handover.objects.filter(type="issue", status="completed", expected_return_date__lt=today).select_related(
-            "to_user", "to_department"
+
+def _asset_event(ctx: TriggerContext, a, tag: str, due=None) -> Event:
+    return Event(
+        f"asset:{a.pk}", tag, _asset_ctx(a, ctx.today, due), f"{ctx.base}/assets/{a.pk}", a.assigned_to, a.department, a, [a]
+    )
+
+
+def _assets_due_on(ctx: TriggerContext, date_field: str, default_days: list[int]):
+    from apps.assets.models import Asset
+
+    for d in ctx.days(default_days):
+        due = ctx.today + datetime.timedelta(days=d)
+        qs = (
+            Asset.objects.filter(**{date_field: due})
+            .exclude(status__in=["retired", "lost"])
+            .select_related("assigned_to", "department", "category")
         )
-        for h in qs:
-            out_assets = list(
-                h.items.filter(asset__status="assigned")
-                .filter(Q(asset__assigned_to=h.to_user) if h.to_user_id else Q(asset__department=h.to_department))
-                .select_related("asset")
-            )
-            if not out_assets:
-                continue
-            first = out_assets[0].asset
-            ctx = _asset_ctx(first, today, h.expected_return_date) | {"reference": h.reference, "count": len(out_assets)}
-            out.append(
-                Event(
-                    f"handover:{h.pk}",
-                    today.isoformat(),
-                    ctx,
-                    f"{base}/handovers/{h.pk}",
-                    h.to_user,
-                    h.to_department,
-                    h,
-                    [i.asset for i in out_assets],
-                )
-            )
-    elif rule.trigger == R.HANDOVER_PENDING:
-        cutoff = now - datetime.timedelta(hours=int(cfg.get("min_age_hours", 24) or 0))
-        for h in Handover.objects.filter(status="pending", created_at__lte=cutoff).select_related("signer"):
-            ctx = {
-                "reference": h.reference,
-                "item_name": h.reference,
-                "user_name": h.signer.get_full_name() if h.signer else "",
-                "status": h.get_status_display(),
-                "count": h.items.count(),
+        for a in qs:
+            yield _asset_event(ctx, a, f"{due.isoformat()}:d{d}", due)
+
+
+def _warranty_expiry(ctx: TriggerContext):
+    return _assets_due_on(ctx, "warranty_expiry", [30, 7, 1])
+
+
+def _maintenance_due(ctx: TriggerContext):
+    return _assets_due_on(ctx, "next_maintenance_date", [7])
+
+
+def _overdue_return(ctx: TriggerContext):
+    from apps.workflows.models import Handover
+
+    qs = Handover.objects.filter(type="issue", status="completed", expected_return_date__lt=ctx.today).select_related(
+        "to_user", "to_department"
+    )
+    for h in qs:
+        still_out = list(
+            h.items.filter(asset__status="assigned")
+            .filter(Q(asset__assigned_to=h.to_user) if h.to_user_id else Q(asset__department=h.to_department))
+            .select_related("asset")
+        )
+        if not still_out:
+            continue
+        context = _asset_ctx(still_out[0].asset, ctx.today, h.expected_return_date) | {
+            "reference": h.reference,
+            "count": len(still_out),
+        }
+        yield Event(
+            f"handover:{h.pk}",
+            ctx.today.isoformat(),
+            context,
+            f"{ctx.base}/handovers/{h.pk}",
+            h.to_user,
+            h.to_department,
+            h,
+            [i.asset for i in still_out],
+        )
+
+
+def _handover_pending(ctx: TriggerContext):
+    from apps.workflows.models import Handover
+
+    cutoff = ctx.now - datetime.timedelta(hours=int(ctx.cfg.get("min_age_hours", 24) or 0))
+    for h in Handover.objects.filter(status="pending", created_at__lte=cutoff).select_related("signer"):
+        context = {
+            "reference": h.reference,
+            "item_name": h.reference,
+            "user_name": h.signer.get_full_name() if h.signer else "",
+            "status": h.get_status_display(),
+            "count": h.items.count(),
+        }
+        yield Event(f"handover:{h.pk}", ctx.today.isoformat(), context, f"{ctx.base}/handovers/{h.pk}", h.signer, None, h, [h])
+
+
+def _new_receipt(ctx: TriggerContext):
+    from apps.workflows.models import GoodsReceipt
+
+    for r in GoodsReceipt.objects.filter(created_at__gt=ctx.since).select_related("vendor"):
+        context = {
+            "reference": r.reference,
+            "item_name": r.reference,
+            "count": r.assets.count(),
+            "due_date": _fmt(r.received_date),
+        }
+        yield Event(f"receipt:{r.pk}", "new", context, f"{ctx.base}/receiving/{r.pk}", None, None, r, [r])
+
+
+def _low_stock(ctx: TriggerContext):
+    from apps.assets.models import Category
+
+    threshold = int(ctx.cfg.get("threshold", 5) or 0)
+    cats = Category.objects.filter(is_active=True)
+    if ctx.cfg.get("category"):
+        cats = cats.filter(pk=ctx.cfg["category"])
+    for c in cats.annotate(stock=Count("assets", filter=Q(assets__status="in_stock"))).filter(stock__lt=threshold):
+        context = {"category": c.name, "item_name": c.name, "count": c.stock}
+        link = f"{ctx.base}/assets?category={c.pk}&status=in_stock"
+        yield Event(f"category:{c.pk}", ctx.today.isoformat(), context, link, None, None, c, [])
+
+
+def _status_change(ctx: TriggerContext):
+    from apps.assets.models import AssetEvent
+
+    events = (
+        AssetEvent.objects.filter(created_at__gt=ctx.since)
+        .exclude(to_status="")
+        .select_related("asset", "asset__assigned_to", "asset__department", "asset__category")
+    )
+    if ctx.cfg.get("to_status"):
+        events = events.filter(to_status=ctx.cfg["to_status"])
+    for e in events:
+        if e.from_status != e.to_status:
+            yield _asset_event(ctx, e.asset, f"event{e.pk}")
+
+
+def _custom_date(ctx: TriggerContext):
+    column, section = ctx.cfg.get("column", ""), ctx.rule.section
+    if not column:
+        return
+    path = section.route if section else ""
+    for d in ctx.days([0]):
+        due = ctx.today + datetime.timedelta(days=d)
+        for row in section_queryset(section).filter(**{f"custom_data__{column}": due.isoformat()}):
+            name = getattr(row, "name", "") or (row.custom_data or {}).get("name", "") or f"#{row.pk}"
+            holder = getattr(row, "assigned_to", None)
+            context = {
+                "item_name": name,
+                "asset_name": name,
+                "asset_tag": getattr(row, "asset_tag", ""),
+                "due_date": _fmt(due),
+                "days_left": d,
+                "user_name": holder.get_full_name() if holder else "",
             }
-            out.append(Event(f"handover:{h.pk}", today.isoformat(), ctx, f"{base}/handovers/{h.pk}", h.signer, None, h, [h]))
-    elif rule.trigger == R.NEW_RECEIPT:
-        for r in GoodsReceipt.objects.filter(created_at__gt=since).select_related("vendor"):
-            ctx = {
-                "reference": r.reference,
-                "item_name": r.reference,
-                "count": r.assets.count(),
-                "due_date": _fmt(r.received_date),
-            }
-            out.append(Event(f"receipt:{r.pk}", "new", ctx, f"{base}/receiving/{r.pk}", None, None, r, [r]))
-    elif rule.trigger == R.LOW_STOCK:
-        threshold = int(cfg.get("threshold", 5) or 0)
-        cats = Category.objects.filter(is_active=True)
-        if cfg.get("category"):
-            cats = cats.filter(pk=cfg["category"])
-        for c in cats.annotate(stock=Count("assets", filter=Q(assets__status="in_stock"))).filter(stock__lt=threshold):
-            ctx = {"category": c.name, "item_name": c.name, "count": c.stock}
-            out.append(
-                Event(
-                    f"category:{c.pk}",
-                    today.isoformat(),
-                    ctx,
-                    f"{base}/assets?category={c.pk}&status=in_stock",
-                    None,
-                    None,
-                    c,
-                    [],
-                )
+            yield Event(
+                f"{row._meta.model_name}:{row.pk}",
+                f"{due.isoformat()}:d{d}",
+                context,
+                f"{ctx.base}{path}",
+                holder,
+                getattr(row, "department", None),
+                row,
+                [row],
             )
-    elif rule.trigger == R.STATUS_CHANGE:
-        events = (
-            AssetEvent.objects.filter(created_at__gt=since)
-            .exclude(to_status="")
-            .select_related("asset", "asset__assigned_to", "asset__department", "asset__category")
-        )
-        if cfg.get("to_status"):
-            events = events.filter(to_status=cfg["to_status"])
-        for e in events:
-            if e.from_status == e.to_status:
-                continue
-            a = e.asset
-            out.append(
-                Event(
-                    f"asset:{a.pk}",
-                    f"event{e.pk}",
-                    _asset_ctx(a, today),
-                    f"{base}/assets/{a.pk}",
-                    a.assigned_to,
-                    a.department,
-                    a,
-                    [a],
-                )
-            )
-    elif rule.trigger == R.CUSTOM_DATE:
-        column = cfg.get("column", "")
-        for d in days_list([0]):
-            due = today + datetime.timedelta(days=d)
-            for row in section_queryset(rule.section).filter(**{f"custom_data__{column}": due.isoformat()}) if column else []:
-                name = getattr(row, "name", "") or (row.custom_data or {}).get("name", "") or f"#{row.pk}"
-                holder = getattr(row, "assigned_to", None)
-                ctx = {
-                    "item_name": name,
-                    "asset_name": name,
-                    "asset_tag": getattr(row, "asset_tag", ""),
-                    "due_date": _fmt(due),
-                    "days_left": d,
-                    "user_name": (holder.get_full_name() if holder else ""),
-                }
-                path = f"{rule.section.route}" if rule.section else ""
-                out.append(
-                    Event(
-                        f"{row._meta.model_name}:{row.pk}",
-                        f"{due.isoformat()}:d{d}",
-                        ctx,
-                        f"{base}{path}",
-                        holder,
-                        getattr(row, "department", None),
-                        row,
-                        [row],
-                    )
-                )
-    elif rule.trigger == R.MANUAL:
-        rows = list(section_queryset(rule.section)[:20000])
-        out.append(
-            Event(
-                "section",
-                "manual",
-                {"count": len(rows)},
-                f"{base}{rule.section.route if rule.section else ''}",
-                None,
-                None,
-                None,
-                rows,
-            )
-        )
-    section_name = getattr(getattr(rule.section, "definition", None), "name", "") if rule.section else ""
+
+
+def _manual(ctx: TriggerContext):
+    section = ctx.rule.section
+    rows = list(section_queryset(section)[:20000])
+    yield Event(
+        "section", "manual", {"count": len(rows)}, f"{ctx.base}{section.route if section else ''}", None, None, None, rows
+    )
+
+
+# Trigger -> handler yielding the Events due now. Add a trigger by adding a handler here (open/closed).
+TRIGGER_HANDLERS = {
+    R.WARRANTY_EXPIRY: _warranty_expiry,
+    R.MAINTENANCE_DUE: _maintenance_due,
+    R.OVERDUE_RETURN: _overdue_return,
+    R.HANDOVER_PENDING: _handover_pending,
+    R.NEW_RECEIPT: _new_receipt,
+    R.LOW_STOCK: _low_stock,
+    R.STATUS_CHANGE: _status_change,
+    R.CUSTOM_DATE: _custom_date,
+    R.MANUAL: _manual,
+}
+
+
+def events_for(rule: ReminderRule, now: datetime.datetime | None = None) -> list[Event]:
+    now = now or timezone.now()
+    ctx = TriggerContext(
+        rule=rule,
+        now=now,
+        today=now.astimezone(_tz((rule.schedule or {}).get("timezone"))).date(),
+        since=rule.last_run_at or (now - datetime.timedelta(days=1)),
+        base=frontend_url(),
+    )
+    handler = TRIGGER_HANDLERS.get(rule.trigger)
+    out = list(handler(ctx)) if handler else []
+    section = rule.section
+    section_name = getattr(getattr(section, "definition", None), "name", "") if section else ""
+    shared = {"section_name": section_name or (section.name if section else ""), "org_name": settings.ORG_NAME}
     for ev in out:
-        ev.context = {
-            "section_name": section_name or (rule.section.name if rule.section else ""),
-            "org_name": settings.ORG_NAME,
-            "link": ev.link,
-        } | ev.context
+        ev.context = shared | {"link": ev.link} | ev.context
     return out
 
 
@@ -400,7 +400,7 @@ def quiet_until(user, now: datetime.datetime) -> datetime.datetime | None:
 def signed_link(path: str) -> str:
     # URL-safe (no "/"), tamper-proof and time-limited.
     token = signing.dumps(path, salt=LINK_SALT, compress=True)
-    return f"{settings.FRONTEND_URL}/api/reminders/download/{token}/"
+    return f"{frontend_url()}/api/reminders/download/{token}/"
 
 
 def unsign_link(token: str) -> str:
@@ -495,8 +495,8 @@ def queue_rule(
             from .templating import SAMPLE_CONTEXT
 
             section_name = rule.section.name if rule.section else ""
-            sample = SAMPLE_CONTEXT | {"org_name": settings.ORG_NAME, "section_name": section_name, "link": settings.FRONTEND_URL}
-            events = [Event("test", "test", sample, settings.FRONTEND_URL)]
+            sample = SAMPLE_CONTEXT | {"org_name": settings.ORG_NAME, "section_name": section_name, "link": frontend_url()}
+            events = [Event("test", "test", sample, frontend_url())]
         events = events[:1]
     created: list[ReminderLog] = []
     for ev in events:

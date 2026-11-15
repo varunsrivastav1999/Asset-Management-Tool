@@ -418,6 +418,27 @@ SINGULAR = {
 ROUTE_TO_TABLE = {t.route: t.key for t in TABLES.values() if t.key != "custom"}
 
 
+# Built-in table key -> "app_label.Model" holding its rows (custom tables use TableRecord).
+TABLE_MODELS = {
+    "assets": "assets.Asset",
+    "receipts": "workflows.GoodsReceipt",
+    "handovers": "workflows.Handover",
+    "maintenance": "maintenance.MaintenanceRecord",
+    "users": "accounts.User",
+    "departments": "accounts.Department",
+    "locations": "assets.Location",
+    "vendors": "assets.Vendor",
+}
+
+
+def model_for(table: str):
+    """The Django model behind a built-in table, or None."""
+    from django.apps import apps
+
+    label = TABLE_MODELS.get(table)
+    return apps.get_model(label) if label else None
+
+
 def table_for_route(route: str) -> str:
     return ROUTE_TO_TABLE.get((route or "").split("?")[0].rstrip("/") or "/", "")
 

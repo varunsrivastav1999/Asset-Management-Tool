@@ -1,6 +1,5 @@
-import datetime
-
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.accounts.models import Department
@@ -96,7 +95,7 @@ class GoodsReceiptSerializer(serializers.ModelSerializer):
         return bool(obj.signature)
 
     def validate_received_date(self, value):
-        if value > datetime.date.today():
+        if value > timezone.localdate():
             raise serializers.ValidationError("Received date cannot be in the future.")
         return value
 
@@ -220,7 +219,7 @@ class HandoverSerializer(serializers.ModelSerializer):
         return items
 
     def validate_expected_return_date(self, value):
-        if value and value < datetime.date.today():
+        if value and value < timezone.localdate():
             raise serializers.ValidationError("Expected return date cannot be in the past.")
         return value
 

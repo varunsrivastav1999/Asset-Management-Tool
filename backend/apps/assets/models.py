@@ -4,6 +4,7 @@ from django.db import models
 from django.utils.text import slugify
 
 from apps.core.files import asset_photo_path, invoice_path, private_storage
+from apps.core.hosts import frontend_url
 from apps.core.models import TimeStampedModel, next_reference
 
 
@@ -191,7 +192,7 @@ class Asset(TimeStampedModel):
 
     @property
     def qr_payload(self) -> str:
-        return f"{settings.FRONTEND_URL}/a/{self.asset_tag}"
+        return f"{frontend_url()}/a/{self.asset_tag}"
 
 
 class AssetPhoto(models.Model):

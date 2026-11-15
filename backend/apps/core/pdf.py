@@ -13,6 +13,8 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from apps.core.hosts import frontend_url
+
 ACCENT = colors.HexColor("#047857")
 DARK = colors.HexColor("#0f172a")
 MUTED = colors.HexColor("#64748b")
@@ -129,7 +131,7 @@ def handover_pdf(handover) -> bytes:
                         f"Reference <b>{_esc(handover.reference)}</b> · Status <b>{_esc(handover.get_status_display())}</b>", BODY
                     ),
                 ],
-                qr_drawing(f"{settings.FRONTEND_URL}/handovers/{handover.pk}"),
+                qr_drawing(f"{frontend_url()}/handovers/{handover.pk}"),
             ]
         ],
         colWidths=[144 * mm, 30 * mm],

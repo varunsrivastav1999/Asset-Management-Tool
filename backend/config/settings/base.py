@@ -28,10 +28,16 @@ def _secret_key() -> str:
 
 SECRET_KEY = _secret_key()
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
-ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+# Public names you own; private-network addresses (LAN IPs, *.local …) are accepted automatically when
+# ALLOW_PRIVATE_NETWORK_HOSTS is on, so the app works on any device at http://<machine IP>:2025 without
+# listing IPs. HostValidationMiddleware enforces this, so Django's own check is opened up.
+TRUSTED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+ALLOW_PRIVATE_NETWORK_HOSTS = env.bool("ALLOW_PRIVATE_NETWORK_HOSTS", default=True)
+ALLOWED_HOSTS = ["*"]
 
 ORG_NAME = env("ORG_NAME", default="Asset Management Tools")
-FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:2025").rstrip("/")
+# Empty = use the address each request came in on (see apps.core.hosts.frontend_url).
+FRONTEND_URL = env("FRONTEND_URL", default="").rstrip("/")
 ADMIN_URL = env("DJANGO_ADMIN_URL", default="admin/")
 
 INSTALLED_APPS = [
@@ -63,6 +69,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "apps.core.middleware.HostValidationMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",

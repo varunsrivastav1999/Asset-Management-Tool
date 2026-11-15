@@ -108,114 +108,121 @@ def _table(columns, rows):
     return {"columns": columns, "rows": rows}
 
 
+def _status_chart(by_status: dict, keys: list[str]):
+    return _chart(
+        [STATUS_LABELS[k] for k in keys],
+        [{"label": "Assets", "data": [by_status.get(k, 0) for k in keys], "colors": [STATUS_COLORS[k] for k in keys]}],
+    )
+
+
+def _dated_assets_table(assets: list, date_key: str, date_label: str):
+    rows = [{"asset": f"{a['asset_tag']} · {a['name']}", "date": a[date_key], "link": f"/assets/{a['id']}"} for a in assets]
+    return _table([{"key": "asset", "label": "Asset"}, {"key": "date", "label": date_label, "type": "date"}], rows)
+
+
+# --- organisation-wide sources ---------------------------------------------------------------
+def _total_assets(ctx):
+    t = ctx.org["totals"]
+    return _stat(t["assets"], hint=f"{t['active']} active", link="/assets")
+
+
+def _warranty_expiring(ctx):
+    w = ctx.org["warranty"]
+    return _stat(w["d30"], hint=f"{w['expired']} already expired", link="/assets?warranty_expiring_in=30")
+
+
+def _activity_timeline(ctx):
+    tl = ctx.org["timeline"]
+    series = (("Issued", "issued", "#a78bfa"), ("Returned", "returned", "#34d399"), ("Added", "added", "#10b981"))
+    return _chart(
+        [t["month"] for t in tl], [{"label": label, "data": [t[key] for t in tl], "color": color} for label, key, color in series]
+    )
+
+
+def _assets_by_category(ctx):
+    rows = ctx.org["by_category"]
+    return _chart(
+        [r["name"] for r in rows],
+        [{"label": "Assets", "data": [r["count"] for r in rows], "colors": [r["color"] or "#10b981" for r in rows]}],
+    )
+
+
+def _assets_by_department(ctx):
+    rows = ctx.org["by_department"]
+    return _chart([r["name"] for r in rows], [{"label": "Assets", "data": [r["count"] for r in rows], "color": "#a78bfa"}])
+
+
+def _recent_activity(ctx):
+    rows = [
+        {
+            "label": e["label"],
+            "event_type": e["event_type"],
+            "asset": f"{e['asset_tag']} · {e['asset_name']}",
+            "actor": e["actor_name"],
+            "when": e["created_at"],
+            "link": f"/assets/{e['asset_id']}",
+        }
+        for e in ctx.org["recent_activity"]
+    ]
+    columns = [
+        {"key": "label", "label": "Event", "type": "badge"},
+        {"key": "asset", "label": "Asset"},
+        {"key": "actor", "label": "By"},
+        {"key": "when", "label": "When", "type": "ago"},
+    ]
+    return _table(columns, rows)
+
+
+# --- personal sources ------------------------------------------------------------------------
+def _my_status_breakdown(ctx):
+    by_status = ctx.personal["my_by_status"]
+    return _status_chart(by_status, [k for k in STATUS_LABELS if by_status.get(k)])
+
+
+def _my_assets_list(ctx):
+    qs = (
+        Asset.objects.filter(assigned_to=ctx.user)
+        .exclude(status=Asset.Status.RETIRED)
+        .select_related("category")
+        .order_by("-assigned_at")[:8]
+    )
+    rows = [
+        {"asset": f"{a.asset_tag} · {a.name}", "category": a.category.name, "status": a.status, "link": f"/assets/{a.pk}"}
+        for a in qs
+    ]
+    columns = [
+        {"key": "asset", "label": "Asset"},
+        {"key": "category", "label": "Category"},
+        {"key": "status", "label": "Status", "type": "status"},
+    ]
+    return _table(columns, rows)
+
+
+# Data source key -> builder(ctx). Add a widget data source by adding one entry (open/closed).
+RESOLVERS = {
+    "total_assets": _total_assets,
+    "portfolio_value": lambda ctx: _stat(ctx.org["totals"]["value"], "currency", "Active assets at cost"),
+    "utilization": lambda ctx: _stat(ctx.org["totals"]["utilization"], "percent", "Assigned vs. usable"),
+    "open_maintenance": lambda ctx: _stat(ctx.org["totals"]["open_maintenance"], link="/maintenance"),
+    "pending_handovers": lambda ctx: _stat(ctx.org["totals"]["pending_handovers"], link="/handovers?status=pending"),
+    "warranty_expiring": _warranty_expiring,
+    "status_breakdown": lambda ctx: _status_chart(ctx.org["by_status"], list(STATUS_LABELS)),
+    "activity_timeline": _activity_timeline,
+    "assets_by_category": _assets_by_category,
+    "assets_by_department": _assets_by_department,
+    "recent_activity": _recent_activity,
+    "expiring_warranties": lambda ctx: _dated_assets_table(ctx.org["expiring_soon"], "warranty_expiry", "Expires"),
+    "maintenance_due": lambda ctx: _dated_assets_table(ctx.org["maintenance_due"], "next_maintenance_date", "Due"),
+    "my_assets": lambda ctx: _stat(ctx.personal["my_assets"], link="/assets"),
+    "awaiting_signature": lambda ctx: _stat(ctx.personal["awaiting_signature"], link="/handovers?awaiting_me=1"),
+    "my_assets_value": lambda ctx: _stat(ctx.personal["my_value"], "currency"),
+    "my_warranty_expiring": lambda ctx: _stat(ctx.personal["my_warranty_expiring"]),
+    "my_status_breakdown": _my_status_breakdown,
+    "my_assets_list": _my_assets_list,
+}
+
+
 def resolve(source: str, ctx: DataContext):
-    o = lambda: ctx.org  # noqa: E731
-    p = lambda: ctx.personal  # noqa: E731
-    if source == "total_assets":
-        t = o()["totals"]
-        return _stat(t["assets"], hint=f"{t['active']} active", link="/assets")
-    if source == "portfolio_value":
-        return _stat(o()["totals"]["value"], "currency", "Active assets at cost")
-    if source == "utilization":
-        return _stat(o()["totals"]["utilization"], "percent", "Assigned vs. usable")
-    if source == "open_maintenance":
-        return _stat(o()["totals"]["open_maintenance"], link="/maintenance")
-    if source == "pending_handovers":
-        return _stat(o()["totals"]["pending_handovers"], link="/handovers?status=pending")
-    if source == "warranty_expiring":
-        w = o()["warranty"]
-        return _stat(w["d30"], hint=f"{w['expired']} already expired", link="/assets?warranty_expiring_in=30")
-    if source == "status_breakdown":
-        s = o()["by_status"]
-        keys = list(STATUS_LABELS)
-        return _chart(
-            [STATUS_LABELS[k] for k in keys],
-            [{"label": "Assets", "data": [s.get(k, 0) for k in keys], "colors": [STATUS_COLORS[k] for k in keys]}],
-        )
-    if source == "activity_timeline":
-        tl = o()["timeline"]
-        return _chart(
-            [t["month"] for t in tl],
-            [
-                {"label": "Issued", "data": [t["issued"] for t in tl], "color": "#a78bfa"},
-                {"label": "Returned", "data": [t["returned"] for t in tl], "color": "#34d399"},
-                {"label": "Added", "data": [t["added"] for t in tl], "color": "#10b981"},
-            ],
-        )
-    if source == "assets_by_category":
-        rows = o()["by_category"]
-        return _chart(
-            [r["name"] for r in rows],
-            [{"label": "Assets", "data": [r["count"] for r in rows], "colors": [r["color"] or "#10b981" for r in rows]}],
-        )
-    if source == "assets_by_department":
-        rows = o()["by_department"]
-        return _chart([r["name"] for r in rows], [{"label": "Assets", "data": [r["count"] for r in rows], "color": "#a78bfa"}])
-    if source == "recent_activity":
-        rows = [
-            {
-                "label": e["label"],
-                "event_type": e["event_type"],
-                "asset": f"{e['asset_tag']} · {e['asset_name']}",
-                "actor": e["actor_name"],
-                "when": e["created_at"],
-                "link": f"/assets/{e['asset_id']}",
-            }
-            for e in o()["recent_activity"]
-        ]
-        return _table(
-            [
-                {"key": "label", "label": "Event", "type": "badge"},
-                {"key": "asset", "label": "Asset"},
-                {"key": "actor", "label": "By"},
-                {"key": "when", "label": "When", "type": "ago"},
-            ],
-            rows,
-        )
-    if source == "expiring_warranties":
-        rows = [
-            {"asset": f"{a['asset_tag']} · {a['name']}", "date": a["warranty_expiry"], "link": f"/assets/{a['id']}"}
-            for a in o()["expiring_soon"]
-        ]
-        return _table([{"key": "asset", "label": "Asset"}, {"key": "date", "label": "Expires", "type": "date"}], rows)
-    if source == "maintenance_due":
-        rows = [
-            {"asset": f"{a['asset_tag']} · {a['name']}", "date": a["next_maintenance_date"], "link": f"/assets/{a['id']}"}
-            for a in o()["maintenance_due"]
-        ]
-        return _table([{"key": "asset", "label": "Asset"}, {"key": "date", "label": "Due", "type": "date"}], rows)
-    if source == "my_assets":
-        return _stat(p()["my_assets"], link="/assets")
-    if source == "awaiting_signature":
-        return _stat(p()["awaiting_signature"], link="/handovers?awaiting_me=1")
-    if source == "my_assets_value":
-        return _stat(p()["my_value"], "currency")
-    if source == "my_warranty_expiring":
-        return _stat(p()["my_warranty_expiring"])
-    if source == "my_status_breakdown":
-        s = p()["my_by_status"]
-        keys = [k for k in STATUS_LABELS if s.get(k)]
-        return _chart(
-            [STATUS_LABELS[k] for k in keys],
-            [{"label": "Assets", "data": [s[k] for k in keys], "colors": [STATUS_COLORS[k] for k in keys]}],
-        )
-    if source == "my_assets_list":
-        qs = (
-            Asset.objects.filter(assigned_to=ctx.user)
-            .exclude(status=Asset.Status.RETIRED)
-            .select_related("category")
-            .order_by("-assigned_at")[:8]
-        )
-        rows = [
-            {"asset": f"{a.asset_tag} · {a.name}", "category": a.category.name, "status": a.status, "link": f"/assets/{a.pk}"}
-            for a in qs
-        ]
-        return _table(
-            [
-                {"key": "asset", "label": "Asset"},
-                {"key": "category", "label": "Category"},
-                {"key": "status", "label": "Status", "type": "status"},
-            ],
-            rows,
-        )
-    return None
+    """Widget payload for a data source, or None for an unknown key."""
+    builder = RESOLVERS.get(source)
+    return builder(ctx) if builder else None

@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.files import private_storage
+from apps.core.hosts import frontend_url
 
 from .engine import compute_next_run, queue_rule
 from .models import ChannelConfig, ReminderLog, ReminderRule
@@ -158,9 +159,8 @@ def _send(log: ReminderLog, config: ChannelConfig) -> str:
 
 
 def _frontend() -> str:
-    from django.conf import settings
 
-    return settings.FRONTEND_URL
+    return frontend_url()
 
 
 @shared_task

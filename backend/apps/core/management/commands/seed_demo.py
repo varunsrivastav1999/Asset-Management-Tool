@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 
 from apps.accounts.models import Department
 from apps.assets.models import Asset, AssetEvent, Category, CustomField, Location, Vendor
@@ -104,7 +105,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("Assets already seeded; skipping asset creation."))
             return
 
-        today = datetime.date.today()
+        today = timezone.localdate()
         for i in range(assets):
             cat_name = rnd.choice(list(ITEMS))
             model, maker, price = rnd.choice(ITEMS[cat_name])

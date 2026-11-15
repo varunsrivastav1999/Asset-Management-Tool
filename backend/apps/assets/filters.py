@@ -2,6 +2,7 @@ import datetime
 
 import django_filters
 from django.db.models import Q
+from django.utils import timezone
 
 from .models import Asset, Category
 
@@ -42,11 +43,11 @@ class AssetFilter(django_filters.FilterSet):
         return qs.filter(category_id__in=category.descendant_ids())
 
     def filter_warranty_expiring(self, qs, name, value):
-        today = datetime.date.today()
+        today = timezone.localdate()
         return qs.filter(warranty_expiry__gte=today, warranty_expiry__lte=today + datetime.timedelta(days=int(value)))
 
     def filter_warranty_expired(self, qs, name, value):
-        today = datetime.date.today()
+        today = timezone.localdate()
         return (
             qs.filter(warranty_expiry__lt=today)
             if value
@@ -54,7 +55,7 @@ class AssetFilter(django_filters.FilterSet):
         )
 
     def filter_maintenance_due(self, qs, name, value):
-        limit = datetime.date.today() + datetime.timedelta(days=int(value))
+        limit = timezone.localdate() + datetime.timedelta(days=int(value))
         return qs.filter(next_maintenance_date__lte=limit).exclude(status=Asset.Status.RETIRED)
 
     def filter_unassigned(self, qs, name, value):

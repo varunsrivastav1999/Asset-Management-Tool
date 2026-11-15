@@ -1,10 +1,11 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { ArrowLeftRight, LayoutGrid, PackagePlus, RefreshCw } from 'lucide-vue-next'
 import { widgetsApi } from '@/api'
 import { parseError } from '@/api/http'
 import { useAuthStore } from '@/stores/auth'
+import { useGreeting } from '@/composables/useGreeting'
 import { useNotificationsStore } from '@/stores/notifications'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -47,10 +48,7 @@ watch(() => notes.dashboardTick, liveReload)
 watch(() => notes.layoutTick, load)
 onMounted(load)
 
-const greeting = computed(() => {
-  const h = new Date().getHours()
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
-})
+const greeting = useGreeting()
 </script>
 
 <template>

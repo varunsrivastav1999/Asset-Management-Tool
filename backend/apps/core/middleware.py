@@ -51,3 +51,29 @@ class RequestContextMiddleware:
                 extra={"request_id": request_id, "status": response.status_code, "duration_ms": duration_ms},
             )
         return response
+
+
+class HostValidationMiddleware:
+    """Validates the Host header against `TRUSTED_HOSTS` plus any private-network address (see core.hosts).
+
+    Django's own ALLOWED_HOSTS check can't express "any LAN address", so it is set to ["*"] and this middleware,
+    which runs first, does the real check. It also binds the request's origin so links in QR codes, PDFs and
+    emails point at the address the user actually used.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.core.exceptions import DisallowedHost
+
+        from .hosts import host_allowed, reset_current_origin, set_current_origin, split_host
+
+        raw = request._get_raw_host()
+        if not host_allowed(split_host(raw)):
+            raise DisallowedHost(f"Invalid HTTP_HOST header: {raw!r}. Add it to DJANGO_ALLOWED_HOSTS.")
+        token = set_current_origin(f"{request.scheme}://{raw}")
+        try:
+            return self.get_response(request)
+        finally:
+            reset_current_origin(token)

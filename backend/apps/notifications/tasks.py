@@ -4,6 +4,7 @@ import logging
 from celery import shared_task
 from django.conf import settings
 from django.db.models import Q
+from django.utils import timezone
 
 from apps.assets.models import Asset
 from apps.maintenance.models import MaintenanceRecord
@@ -24,7 +25,7 @@ def _recipients(asset):
 @shared_task
 def check_warranty_expiry() -> int:
     """Alert managers (and the holder) at each configured threshold before warranty expiry."""
-    today = datetime.date.today()
+    today = timezone.localdate()
     thresholds = sorted(set(settings.WARRANTY_ALERT_DAYS), reverse=True)
     horizon = today + datetime.timedelta(days=max(thresholds))
     assets = (
@@ -67,7 +68,7 @@ def check_warranty_expiry() -> int:
 
 @shared_task
 def check_maintenance_due() -> int:
-    today = datetime.date.today()
+    today = timezone.localdate()
     limit = today + datetime.timedelta(days=settings.MAINTENANCE_ALERT_DAYS)
     sent = 0
     assets = (
@@ -114,7 +115,7 @@ def check_maintenance_due() -> int:
 def check_overdue_returns() -> int:
     from apps.workflows.models import Handover
 
-    today = datetime.date.today()
+    today = timezone.localdate()
     sent = 0
     handovers = Handover.objects.filter(
         type=Handover.Type.ISSUE,

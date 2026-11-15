@@ -21,30 +21,19 @@ from .models import SidebarItem, TableColumn, TableDefinition, TableRecord
 from .serializers import ICON_RE
 from .signals import broadcast_sidebar_change
 from .table_api import ConfigurableTableMixin, coerce_value
-from .tables import TABLES, ensure_columns
+from .tables import TABLES, ensure_columns, model_for
 
 CUSTOM = TableDefinition.CUSTOM
 
 
 def row_count(defn: TableDefinition) -> int:
     """Live (non-archived) rows behind a table."""
-    from django.apps import apps
-
     if defn.source == CUSTOM:
         return defn.records.filter(is_archived=False).count()
-    model = {
-        "assets": "assets.Asset",
-        "receipts": "workflows.GoodsReceipt",
-        "handovers": "workflows.Handover",
-        "maintenance": "maintenance.MaintenanceRecord",
-        "users": "accounts.User",
-        "departments": "accounts.Department",
-        "locations": "assets.Location",
-        "vendors": "assets.Vendor",
-    }.get(defn.source)
-    if not model:
+    model = model_for(defn.source)
+    if model is None:
         return 0
-    qs = apps.get_model(model).objects.all()
+    qs = model.objects.all()
     if defn.source == "assets":
         qs = qs.exclude(status="retired")  # retired = archived
     if defn.source == "users":
