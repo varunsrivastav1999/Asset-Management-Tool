@@ -128,8 +128,9 @@ class MeSerializer(serializers.ModelSerializer):
             "avatar",
             "is_superuser",
             "last_login",
+            "must_change_password",
         ]
-        read_only_fields = ["email", "role", "department", "employee_id", "is_superuser", "last_login"]
+        read_only_fields = ["email", "role", "department", "employee_id", "is_superuser", "last_login", "must_change_password"]
 
 
 class ChangePasswordSerializer(serializers.Serializer):

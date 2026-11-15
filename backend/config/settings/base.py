@@ -131,6 +131,10 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = env("MEDIA_ROOT", default=str(BASE_DIR / "media"))
 # Signatures live outside MEDIA_ROOT so nginx never serves them publicly.
 PRIVATE_MEDIA_ROOT = env("PRIVATE_MEDIA_ROOT", default=str(BASE_DIR / "private_media"))
+# Database backups written by the `backup` service (shared volume); see apps.core.backups.
+BACKUP_DIR = env("BACKUP_DIR", default=str(BASE_DIR / "backups"))
+BACKUP_TIME = env("BACKUP_TIME", default="02:00")
+BACKUP_KEEP = env.int("BACKUP_KEEP", default=7)
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},

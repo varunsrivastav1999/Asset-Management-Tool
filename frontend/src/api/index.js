@@ -143,3 +143,9 @@ export const remindersApi = {
   savePreferences: (data) => unwrap(http.put('/reminders/preferences/', data)),
   verifyPhone: (code) => unwrap(http.post('/reminders/preferences/verify-phone/', code ? { code } : {})),
 }
+
+export const backupsApi = {
+  status: () => unwrap(http.get('/backups/')),
+  create: () => unwrap(http.post('/backups/')),
+  remove: (name) => unwrap(http.delete(`/backups/${encodeURIComponent(name)}/`)),
+}

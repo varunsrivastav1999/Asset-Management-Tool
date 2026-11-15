@@ -126,7 +126,7 @@ def test_reorder_rejects_cycles_and_non_group_parents(admin_client):
 def test_reset_restores_defaults(admin_client, manager_client):
     SidebarItem.objects.all().delete()
     assert manager_client.post("/api/sidebar-items/reset/").status_code == 403
-    assert admin_client.post("/api/sidebar-items/reset/").data["created"] == 21
+    assert admin_client.post("/api/sidebar-items/reset/").data["created"] == 22
     assert admin_client.get("/api/sidebar-items/tree/").data["items"][0]["name"] == "Overview"
 
 

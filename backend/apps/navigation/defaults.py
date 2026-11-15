@@ -67,6 +67,7 @@ DEFAULT_SIDEBAR = [
             {"name": "Sidebar", "route": "/settings/sidebar", "icon": "panel-left", "roles": ADMIN},
             {"name": "Dashboard", "route": "/settings/dashboard", "icon": "layout-grid", "roles": ADMIN},
             {"name": "Tables", "route": "/settings/tables", "icon": "list", "roles": ADMIN},
+            {"name": "Backups", "route": "/settings/backups", "icon": "hard-drive", "roles": ADMIN},
         ],
     },
 ]

@@ -148,7 +148,7 @@ class ChangePasswordView(APIView):
         serializer = ChangePasswordSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         request.user.set_password(serializer.validated_data["new_password"])
-        request.user.save(update_fields=["password"])
+        request.user.save(update_fields=["password", "must_change_password"])
         record(AuditLog.Action.PASSWORD_CHANGE, request.user, request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 

@@ -22,6 +22,7 @@ import { useUiStore } from '@/stores/ui'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import BrandName from '@/components/ui/BrandName.vue'
 import SidebarNav from '@/components/SidebarNav.vue'
+import DefaultPasswordBanner from '@/components/DefaultPasswordBanner.vue'
 import { useSidebarStore } from '@/stores/sidebar'
 import { iconFor } from '@/utils/icons'
 import { timeAgo } from '@/utils/format'
@@ -211,6 +212,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       </header>
 
       <main class="mx-auto w-full max-w-[1400px] flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-8 lg:pb-10">
+        <DefaultPasswordBanner />
         <RouterView v-slot="{ Component, route: r }">
           <Transition name="page" mode="out-in">
             <component :is="Component" :key="r.path" />

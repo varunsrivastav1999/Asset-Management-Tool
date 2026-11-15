@@ -28,7 +28,7 @@ RUN pip install --no-index --find-links=/wheels /wheels/* && rm -rf /wheels
 WORKDIR /app
 COPY --chown=app:app . .
 RUN chmod +x /app/entrypoint.sh \
-    && mkdir -p /data/media /data/private /app/staticfiles \
+    && mkdir -p /data/media /data/private /data/backups /app/staticfiles \
     && chown -R app:app /data /app/staticfiles \
     && DJANGO_SECRET_KEY=build-only-placeholder-key-not-used-at-runtime-0000000000 \
        python manage.py collectstatic --noinput -v0

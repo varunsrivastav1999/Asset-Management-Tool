@@ -60,6 +60,8 @@ class User(AbstractUser):
     job_title = models.CharField(max_length=120, blank=True)
     phone = models.CharField(max_length=32, blank=True)
     avatar = models.ImageField(upload_to=avatar_path, null=True, blank=True)
+    # Set for the first-run admin created with a default password; cleared as soon as any new password is set.
+    must_change_password = models.BooleanField(default=False)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]
@@ -71,6 +73,10 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.get_full_name() or self.email
+
+    def set_password(self, raw_password):
+        super().set_password(raw_password)
+        self.must_change_password = False
 
     def save(self, *args, **kwargs):
         if self.email:

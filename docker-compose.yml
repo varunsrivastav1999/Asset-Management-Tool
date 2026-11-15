@@ -1,9 +1,10 @@
 # One command, no manual steps:   docker compose up --build
 #   App (nginx: SPA + reverse proxy)          -> https://localhost:2025 (or https://<this machine's LAN IP>:2025)
 #   Backend (Django API + Channels, ASGI)    -> http://127.0.0.1:2000 (localhost only; use nginx publicly)
-# The api container migrates, seeds defaults (menu, tables, columns, widgets, reminder rules) and creates the
-# first admin from ADMIN_EMAIL / ADMIN_PASSWORD (a random password is generated and printed once if unset).
-# .env is optional; the defaults below are for a local plain-HTTP trial — see .env.example for production.
+# The api container migrates and seeds defaults (menu, tables, columns, widgets, reminder rules). On a fresh
+# database it creates the first admin: admin@gmail.com / admin unless ADMIN_EMAIL / ADMIN_PASSWORD are set;
+# the app then asks for a new password. The backup service keeps daily database backups.
+# .env is optional — see .env.example for production settings.
 name: asset-mgmt
 
 x-backend: &backend
@@ -28,9 +29,13 @@ x-backend: &backend
     GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
     CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-1}
     MALLOC_ARENA_MAX: "2"
+    BACKUP_DIR: /data/backups  # shared with the backup service
+    BACKUP_TIME: ${BACKUP_TIME:-02:00}
+    BACKUP_KEEP: ${BACKUP_KEEP:-7}
   volumes:
     - media:/data/media
     - private_media:/data/private
+    - backups:/data/backups
   depends_on:
     postgres: { condition: service_healthy }
     redis: { condition: service_healthy }
@@ -84,8 +89,9 @@ services:
     command: ["api"]
     environment:
       <<: *backend-env
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # First run only (fresh database): sign in with these, then change the password when prompted.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@gmail.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD-admin}
     ports:
       - "${BACKEND_BIND:-127.0.0.1}:${BACKEND_PORT:-2000}:2000"
     mem_limit: 512m
@@ -117,6 +123,31 @@ services:
     depends_on:
       api: { condition: service_healthy }
 
+  # Database backups: daily automatic (kept BACKUP_KEEP days) + on demand from Settings -> Backups.
+  # Restore: see README ("Backups"). Files live in the `backups` volume.
+  backup:
+    image: postgres:16-alpine
+    entrypoint: ["/bin/sh", "/scripts/backup.sh"]
+    command: ["run"]
+    environment:
+      PGHOST: postgres
+      PGDATABASE: ${POSTGRES_DB:-asset}
+      PGUSER: ${POSTGRES_USER:-asset}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-asset_local_only}
+      BACKUP_TIME: ${BACKUP_TIME:-02:00}
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+      TZ: ${TIME_ZONE:-UTC}
+      APP_UID: "1000"
+    volumes:
+      - backups:/backups
+      - ./backup:/scripts:ro
+    mem_limit: 128m
+    depends_on:
+      postgres: { condition: service_healthy }
+      api: { condition: service_healthy }  # migrations done, so the first backup has the full schema
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+
   nginx:
     build:
       context: .
@@ -143,6 +174,7 @@ services:
 
 volumes:
   pgdata:
+  backups:
   nginx_tls:
   redisdata:
   media:

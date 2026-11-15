@@ -4,12 +4,15 @@ import secrets
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models import Q
+
+# First-run admin when ADMIN_EMAIL / ADMIN_PASSWORD aren't set. The password is flagged for change at first sign-in.
+DEFAULT_ADMIN_EMAIL = "admin@gmail.com"
+DEFAULT_ADMIN_PASSWORD = "admin"
 
 
 class Command(BaseCommand):
-    help = (
-        "Idempotent first-run setup: default sidebar/columns/tables/widgets and the first admin (ADMIN_EMAIL / ADMIN_PASSWORD)."
-    )
+    help = "Idempotent first-run setup: default menu, tables, columns and widgets; on a fresh database also the first admin."
 
     @transaction.atomic
     def handle(self, *args, **options):
@@ -26,25 +29,26 @@ class Command(BaseCommand):
             ensure_definition(item)
             ensure_columns(item)
 
+        self._first_admin()
+
+    def _first_admin(self):
+        """Create the first admin once, on a fresh database. Never touches existing accounts or passwords."""
         User = get_user_model()
-        email = (os.environ.get("ADMIN_EMAIL") or "").strip().lower()
-        if not email:
-            if not User.objects.filter(is_superuser=True).exists():
-                self.stdout.write(
-                    self.style.WARNING("No ADMIN_EMAIL set and no superuser exists — run `manage.py createsuperuser`.")
-                )
-            return
-        if User.objects.filter(email__iexact=email).exists():
-            self.stdout.write(f"Admin {email} already exists.")
-            return
-        password = os.environ.get("ADMIN_PASSWORD") or ""
-        generated = not password
+        if User.objects.filter(Q(is_superuser=True) | Q(role="admin")).exists():
+            return  # not a fresh database: an admin already exists
+        email = (os.environ.get("ADMIN_EMAIL") or DEFAULT_ADMIN_EMAIL).strip().lower()
+        password = os.environ.get("ADMIN_PASSWORD")
+        generated = password == ""  # explicitly empty: generate a random one
+        if password is None:
+            password = DEFAULT_ADMIN_PASSWORD
         if generated:
             password = secrets.token_urlsafe(12)
-        User.objects.create_superuser(email=email, password=password, first_name="Admin", last_name="User")
-        self.stdout.write(self.style.SUCCESS(f"Created admin {email}."))
+        user = User.objects.create_superuser(email=email, password=password, first_name="Admin", last_name="User")
+        # A well-known or printed password must be replaced: the app keeps reminding until it is.
+        user.must_change_password = generated or password == DEFAULT_ADMIN_PASSWORD
+        user.save(update_fields=["must_change_password"])
+        self.stdout.write(self.style.SUCCESS(f"Created the first admin: {email}"))
         if generated:
-            # Printed once so a fresh `docker compose up` needs no manual step; change it after first login.
-            self.stdout.write(
-                self.style.WARNING(f"Generated admin password: {password}  (set ADMIN_PASSWORD to choose your own)")
-            )
+            self.stdout.write(self.style.WARNING(f"Generated admin password: {password}  (change it after signing in)"))
+        elif user.must_change_password:
+            self.stdout.write(self.style.WARNING("The admin uses the default password — change it after signing in."))

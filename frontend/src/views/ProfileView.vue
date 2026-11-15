@@ -59,6 +59,7 @@ async function changePassword() {
     await authApi.changePassword({ current_password: pwd.current_password, new_password: pwd.new_password })
     Object.assign(pwd, { current_password: '', new_password: '', confirm: '' })
     ui.success('Password changed')
+    auth.refreshProfile().catch(() => {}) // clears the default-password reminder
   } catch (e) {
     const { message, fields } = parseError(e)
     pwdErrors.value = fields
@@ -116,7 +117,7 @@ const modes = [
 
     <NotificationPreferences />
 
-    <form class="card p-6" @submit.prevent="changePassword">
+    <form id="password" class="card scroll-mt-24 p-6" @submit.prevent="changePassword">
       <h2 class="mb-4 font-semibold">Change password</h2>
       <div class="grid gap-4 sm:grid-cols-3">
         <AppInput v-model="pwd.current_password" label="Current" type="password" autocomplete="current-password" :error="pwdErrors.current_password" />

@@ -258,14 +258,43 @@ def test_bootstrap_creates_admin_once(monkeypatch, capsys):
     assert User.objects.filter(email="boss@example.com").count() == 1
 
 
-def test_bootstrap_generates_password_when_unset(monkeypatch, capsys):
-    monkeypatch.setenv("ADMIN_EMAIL", "auto@example.com")
+def test_bootstrap_default_admin_must_change_password(monkeypatch, capsys, client):
+    monkeypatch.delenv("ADMIN_EMAIL", raising=False)
     monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
     call_command("bootstrap")
+    u = User.objects.get(email="admin@gmail.com")
+    assert u.is_superuser and u.check_password("admin") and u.must_change_password
+    assert "change it after signing in" in capsys.readouterr().out
+
+    login = client.post("/api/auth/login/", {"email": "admin@gmail.com", "password": "admin"}, content_type="application/json")
+    assert login.status_code == 200 and login.json()["user"]["must_change_password"] is True
+    auth = {"HTTP_AUTHORIZATION": f"Bearer {login.json()['access']}"}
+    changed = client.post(
+        "/api/auth/change-password/",
+        {"current_password": "admin", "new_password": "N3w-Strong-pass!"},
+        content_type="application/json",
+        **auth,
+    )
+    assert changed.status_code in (200, 204), changed.content
+    u.refresh_from_db()
+    assert not u.must_change_password and u.check_password("N3w-Strong-pass!")
+
+
+def test_bootstrap_generates_password_when_explicitly_empty(monkeypatch, capsys):
+    monkeypatch.setenv("ADMIN_EMAIL", "auto@example.com")
+    monkeypatch.setenv("ADMIN_PASSWORD", "")
+    call_command("bootstrap")
     out = capsys.readouterr().out
-    assert "Generated admin password:" in out
     password = out.split("Generated admin password:")[1].split()[0]
-    assert User.objects.get(email="auto@example.com").check_password(password)
+    u = User.objects.get(email="auto@example.com")
+    assert u.check_password(password) and u.must_change_password
+
+
+def test_bootstrap_only_runs_on_a_fresh_database(monkeypatch, admin_user):
+    monkeypatch.setenv("ADMIN_EMAIL", "second@example.com")
+    monkeypatch.setenv("ADMIN_PASSWORD", "Another-pass-123")
+    call_command("bootstrap")
+    assert not User.objects.filter(email="second@example.com").exists()  # an admin already exists
 
 
 # --- Deleting / updating menu pages that own tables (regression) ---------------------------

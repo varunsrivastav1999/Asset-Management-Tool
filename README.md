@@ -84,19 +84,13 @@ One command, no `.env` and no manual steps:
 docker compose up -d --build
 ```
 
-On first start the `api` container:
+On first start the stack sets itself up:
 - generates a strong `DJANGO_SECRET_KEY` and stores it in the `private_media` volume;
-- applies migrations;
-- seeds the default menu, table definitions and columns, dashboard widgets and the (disabled) reminder rules;
-- creates the first admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+- applies migrations and seeds the default menu, table definitions and columns, dashboard widgets and the (disabled) reminder rules;
+- on a fresh database only, creates the first admin, **admin@gmail.com** with password **admin** (or `ADMIN_EMAIL` / `ADMIN_PASSWORD` from `.env`);
+- starts the backup service, which takes a first database backup straight away.
 
-Without `ADMIN_PASSWORD`, the admin is `admin@example.com` and a random password is printed once:
-
-```bash
-docker compose logs api | grep "Generated admin password"
-```
-
-Open **https://localhost:2025**, or **https://<this machine's LAN IP>:2025** from a phone or another computer, and sign in. Every step can run again safely and never changes existing data or passwords. To customise anything, copy `.env.example` to `.env` (every setting is documented there).
+Open **https://localhost:2025** and sign in as `admin@gmail.com` / `admin`. Until you change that password, every page shows a reminder with a link to do it, because anyone on your network could otherwise sign in with it. Restarting or rebuilding never changes existing data, accounts or passwords. To customise anything, copy `.env.example` to `.env` (every setting is documented there).
 
 To load demo data (departments, categories with custom fields, ~60 assets, and accounts `admin@`, `manager@`, `employee@example.com` with password `Demo@12345`):
 
@@ -117,6 +111,38 @@ The stack is tuned for a small server: memory limits (Postgres 320 MB, Redis 96 
 
 Default sidebar items, dashboard widgets and table columns are created by migrations (columns are also created on demand for new table pages); admins can restore them any time with **Reset** in the settings screens or the Columns panel.
 
+### Backups
+
+- The `backup` service runs Postgres' own `pg_dump` (same version as the database). It backs up the database every day at `BACKUP_TIME` (default 02:00, in `TIME_ZONE`), keeps the newest `BACKUP_KEEP` daily backups (default 7), and takes one immediately on first start.
+- **Settings → Backups** (admins) shows the service status, schedule and every backup. You can **Back up now**, **download** a backup (keep copies off this machine) and delete old ones. Every action is recorded in the audit log.
+- Backups are stored in the `backups` Docker volume as `auto-YYYYMMDD-HHMMSS.dump` / `manual-….dump` (compressed `pg_dump` custom format). List them from the terminal:
+
+```bash
+docker compose exec backup /scripts/backup.sh list
+```
+
+- **Restore** replaces all current data with the backup. Stop the app first, restore, then start it again:
+
+```bash
+docker compose stop api worker beat
+```
+
+```bash
+docker compose run --rm backup restore manual-20261116-101500.dump
+```
+
+```bash
+docker compose start api worker beat
+```
+
+- To restore a downloaded file, copy it into the volume first, then run the same `restore` command with its name:
+
+```bash
+docker compose cp ./manual-20261116-101500.dump backup:/backups/
+```
+
+- Uploaded files (photos, signatures, invoices) live in the `media` and `private_media` volumes; back those up with your usual volume or host backup.
+
 ### Using it from phones and other devices
 
 - Every device on the same network can open **https://<this machine's IP>:2025**. No IP needs configuring: any private-network address (192.168.x.x, 10.x.x.x, `*.local` …) is accepted automatically, so it keeps working when the IP changes. QR codes, PDFs and email links use the address the app was opened on (set `FRONTEND_URL` to pin one).
@@ -132,7 +158,7 @@ Default sidebar items, dashboard widgets and table columns are created by migrat
 4. **Email/SMS:** set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `DEFAULT_FROM_EMAIL` and, for SMS, `SMS_PROVIDER`, `SMS_API_KEY`, `SMS_SENDER_ID`. Without `SMTP_HOST`, emails are written to the logs.
 5. **Django admin:** only active superusers can sign in. Nginx additionally allows `/admin/` only from loopback/private ranges — edit `nginx/snippets/admin-access.conf` for your office/VPN, and optionally add basic auth (`nginx/admin-auth/README.md`). If you change `DJANGO_ADMIN_URL`, update the `location /admin/` block too.
 6. Keep `BACKEND_BIND=127.0.0.1` so the API is only reachable through nginx (headers, rate limits, admin allowlist).
-7. Back up the `pgdata`, `media` and `private_media` volumes. `private_media` holds signatures and is never served by nginx.
+7. Database backups run automatically (see **Backups**): download them regularly, and also back up the `media` and `private_media` volumes. `private_media` holds signatures and invoices and is never served by nginx.
 8. Ship logs: everything logs JSON to stdout (`LOG_FORMAT=json`); each request carries an `X-Request-ID` that also appears in audit entries.
 
 Upgrading: `docker compose up -d --build` — the `api` container applies migrations before starting (`RUN_MIGRATIONS=false` to disable and run `docker compose run --rm api migrate` yourself).

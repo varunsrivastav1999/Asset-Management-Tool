@@ -7,7 +7,7 @@ from rest_framework.routers import DefaultRouter
 from apps.accounts.views import DepartmentViewSet, UserViewSet
 from apps.assets.views import AssetViewSet, CategoryViewSet, LocationViewSet, MyAssetsViewSet, VendorViewSet
 from apps.audit.api import AuditLogViewSet
-from apps.core.views import app_config, liveness, readiness
+from apps.core.views import BackupFileView, BackupsView, app_config, liveness, readiness
 from apps.dashboard.api import DashboardWidgetViewSet, dashboard
 from apps.dashboard.views import stats
 from apps.maintenance.views import MaintenanceViewSet
@@ -40,6 +40,8 @@ api = [
     path("health/", liveness, name="health"),
     path("health/ready/", readiness, name="health-ready"),
     path("app-config/", app_config, name="app-config"),
+    path("backups/", BackupsView.as_view(), name="backups"),
+    path("backups/<str:name>/", BackupFileView.as_view(), name="backup-file"),
     path("auth/", include("apps.accounts.urls")),
     path("dashboard/", dashboard, name="dashboard"),
     path("dashboard/stats/", stats, name="dashboard-stats"),
