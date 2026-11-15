@@ -1,0 +1,39 @@
+# Development override.
+#
+# a) Infrastructure only, run Django (:2000) and Vite (:2025) on the host:
+#      docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d postgres redis mailhog
+# b) Everything in Docker, backend published on all interfaces, debug logs, emails caught by MailHog:
+#      docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#    Read the emails at http://localhost:8025
+services:
+  postgres:
+    ports: ["5432:5432"]
+  redis:
+    ports: ["6379:6379"]
+
+  # Dev-only SMTP catcher: every email the app sends shows up in the web UI.
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports: ["1025:1025", "8025:8025"]
+    mem_limit: 64m
+    restart: unless-stopped
+
+  api:
+    ports: !override
+      - "${BACKEND_PORT:-2000}:2000"
+    environment:
+      LOG_FORMAT: text
+      LOG_LEVEL: DEBUG
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
+      SMTP_USE_TLS: "false"
+      DEFAULT_FROM_EMAIL: assets@localhost
+    depends_on:
+      mailhog: { condition: service_started }
+
+  worker:
+    environment:
+      SMTP_HOST: mailhog
+      SMTP_PORT: "1025"
+      SMTP_USE_TLS: "false"
+      DEFAULT_FROM_EMAIL: assets@localhost

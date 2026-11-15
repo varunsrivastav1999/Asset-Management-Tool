@@ -1,0 +1,137 @@
+from django.conf import settings
+from django.core.validators import RegexValidator
+from django.db import models
+from django.db.models.functions import Lower
+
+from apps.core.models import TimeStampedModel
+from apps.core.roles import default_roles
+
+HEX_COLOR = RegexValidator(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$", "Use a hex color such as #10b981.")
+
+
+class SidebarItem(TimeStampedModel):
+    class Type(models.TextChoices):
+        PAGE = "page", "Page (in-app route)"
+        LINK = "link", "External link"
+        GROUP = "group", "Group"
+        DIVIDER = "divider", "Divider"
+
+    name = models.CharField(max_length=80, blank=True)
+    item_type = models.CharField("type", max_length=16, choices=Type.choices, default=Type.PAGE)
+    icon = models.CharField(max_length=48, blank=True)
+    route = models.CharField(max_length=200, blank=True, help_text="In-app path for pages, e.g. /assets")
+    url = models.URLField(max_length=500, blank=True, help_text="Absolute http(s) URL for links")
+    open_in_new_tab = models.BooleanField(default=True)
+    parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.CASCADE, related_name="children")
+    order = models.PositiveIntegerField(default=0, db_index=True)
+    visible_roles = models.JSONField(default=default_roles)
+    is_active = models.BooleanField(default=True)
+
+    # Appearance (all optional; empty means "use the theme default").
+    color = models.CharField(max_length=9, blank=True, validators=[HEX_COLOR], help_text="Label color")
+    icon_color = models.CharField(max_length=9, blank=True, validators=[HEX_COLOR])
+    active_color = models.CharField(max_length=9, blank=True, validators=[HEX_COLOR], help_text="Highlight when the page is open")
+    gradient = models.BooleanField(default=False, help_text="Active highlight uses a gradient from active color to color")
+    glow = models.BooleanField(default=False, help_text="Soft glow around the icon / active highlight")
+
+    # Pages that render a data table point at a table definition (see navigation.tables).
+    table = models.CharField(max_length=32, blank=True, help_text="Table definition key, e.g. 'assets'")
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self):
+        return self.name or self.get_item_type_display()
+
+
+class TableColumn(TimeStampedModel):
+    """One column of a configurable table, scoped to a sidebar page."""
+
+    class Type(models.TextChoices):
+        AUTO_NUMBER = "auto_number", "Auto number (S.No)"
+        TEXT = "text", "Text"
+        NUMBER = "number", "Number"
+        DATE = "date", "Date"
+        BOOLEAN = "boolean", "Yes / No"
+        SELECT = "select", "Select"
+        USER = "user", "User"
+        STATUS = "status", "Status"
+        FILE = "file", "File / link"
+
+    sidebar_item = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="columns")
+    name = models.CharField(max_length=60, help_text="Header label")
+    key = models.SlugField(max_length=64)
+    column_type = models.CharField("type", max_length=16, choices=Type.choices, default=Type.TEXT)
+    options = models.JSONField(default=list, blank=True, help_text="Choices for select columns")
+    width = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Width in pixels (optional)")
+    order = models.PositiveIntegerField(default=0, db_index=True)
+    is_visible = models.BooleanField(default=True, help_text="Shown by default (users may still toggle it)")
+    is_required = models.BooleanField(default=False, help_text="Always shown; users cannot hide it")
+    is_searchable = models.BooleanField(default=False)
+    is_sortable = models.BooleanField(default=False)
+    is_builtin = models.BooleanField(default=False, editable=False)
+    visible_roles = models.JSONField(default=default_roles)
+
+    class Meta:
+        ordering = ["order", "id"]
+        constraints = [models.UniqueConstraint(fields=["sidebar_item", "key"], name="uniq_table_column_key")]
+
+    def __str__(self):
+        return f"{self.sidebar_item}: {self.name}"
+
+
+class TablePreference(models.Model):
+    """A user's personal show/hide choices for one table."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="table_preferences")
+    sidebar_item = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="preferences")
+    hidden = models.JSONField(default=list, blank=True)
+    shown = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "sidebar_item"], name="uniq_table_pref")]
+
+    def __str__(self):
+        return f"{self.user_id} @ {self.sidebar_item_id}"
+
+
+class TableDefinition(TimeStampedModel):
+    """The table a sidebar page shows: its names, icon and description, editable by admins.
+
+    `source` is a built-in table key (assets, receipts, …) or "custom" for admin-created tables
+    whose rows are TableRecords.
+    """
+
+    CUSTOM = "custom"
+
+    sidebar_item = models.OneToOneField(SidebarItem, on_delete=models.CASCADE, related_name="definition")
+    source = models.CharField(max_length=32, db_index=True)
+    slug = models.SlugField(max_length=80, unique=True)
+    name = models.CharField(max_length=80, help_text="Plural display name, e.g. Equipment")
+    singular = models.CharField(max_length=80, help_text="Used in buttons, e.g. Add Equipment item")
+    icon = models.CharField(max_length=48, blank=True)
+    description = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["name"]
+        constraints = [models.UniqueConstraint(Lower("name"), name="uniq_table_definition_name_ci")]
+
+    def __str__(self):
+        return self.name
+
+
+class TableRecord(TimeStampedModel):
+    """A row of an admin-created (custom) table. Column values live in custom_data."""
+
+    definition = models.ForeignKey(TableDefinition, null=True, blank=True, on_delete=models.SET_NULL, related_name="records")
+    custom_data = models.JSONField(default=dict, blank=True)
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_from = models.CharField(max_length=80, blank=True, help_text="Table name when the table was deleted")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"Record {self.pk}"

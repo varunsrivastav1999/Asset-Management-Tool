@@ -1,0 +1,144 @@
+# One command, no manual steps:   docker compose up --build
+#   App (nginx: SPA + reverse proxy)          -> http://localhost:2025
+#   Backend (Django API + Channels, ASGI)    -> http://127.0.0.1:2000 (localhost only; use nginx publicly)
+# The api container migrates, seeds defaults (menu, tables, columns, widgets, reminder rules) and creates the
+# first admin from ADMIN_EMAIL / ADMIN_PASSWORD (a random password is generated and printed once if unset).
+# .env is optional; the defaults below are for a local plain-HTTP trial — see .env.example for production.
+name: asset-mgmt
+
+x-backend: &backend
+  build:
+    context: ./backend
+  image: asset-mgmt/backend:${APP_VERSION:-latest}
+  env_file:
+    - path: .env
+      required: false
+  environment: &backend-env
+    DATABASE_URL: postgres://${POSTGRES_USER:-asset}:${POSTGRES_PASSWORD:-asset_local_only}@postgres:5432/${POSTGRES_DB:-asset}
+    REDIS_URL: redis://redis:6379
+    BACKEND_PORT: "2000"
+    FRONTEND_URL: ${FRONTEND_URL:-http://localhost:2025}
+    DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+    CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:2025,http://127.0.0.1:2025}
+    # Plain-HTTP friendly defaults; set all three to true behind HTTPS.
+    DJANGO_SECURE_SSL_REDIRECT: ${DJANGO_SECURE_SSL_REDIRECT:-false}
+    DJANGO_SECURE_COOKIES: ${DJANGO_SECURE_COOKIES:-false}
+    JWT_COOKIE_SECURE: ${JWT_COOKIE_SECURE:-false}
+    LOG_FORMAT: ${LOG_FORMAT:-json}
+    ASGI_SERVER: ${ASGI_SERVER:-gunicorn}
+    GUNICORN_WORKERS: ${GUNICORN_WORKERS:-2}
+    CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-1}
+    MALLOC_ARENA_MAX: "2"
+  volumes:
+    - media:/data/media
+    - private_media:/data/private
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-asset}
+      POSTGRES_USER: ${POSTGRES_USER:-asset}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-asset_local_only}
+    # Tuned for a small box; the database is only reachable on the internal Docker network.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - effective_cache_size=192MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - max_connections=40
+    volumes: [pgdata:/var/lib/postgresql/data]
+    mem_limit: 320m
+    shm_size: 128m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "64mb", "--maxmemory-policy", "noeviction", "--save", ""]
+    volumes: [redisdata:/data]
+    mem_limit: 96m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    <<: *backend
+    command: ["api"]
+    environment:
+      <<: *backend-env
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    ports:
+      - "${BACKEND_BIND:-127.0.0.1}:${BACKEND_PORT:-2000}:2000"
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:2000/api/health/ready/', timeout=4)"]
+      interval: 15s
+      timeout: 6s
+      start_period: 60s
+      retries: 5
+
+  worker:
+    <<: *backend
+    command: ["worker"]
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping --timeout 5 | grep -q pong"]
+      interval: 60s
+      timeout: 20s
+      start_period: 40s
+      retries: 3
+    depends_on:
+      api: { condition: service_healthy }
+
+  beat:
+    <<: *backend
+    command: ["beat"]
+    mem_limit: 192m
+    healthcheck: { disable: true }
+    depends_on:
+      api: { condition: service_healthy }
+
+  nginx:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_APP_NAME: ${VITE_APP_NAME:-Asset Management Tools}
+    image: asset-mgmt/web:${APP_VERSION:-latest}
+    ports:
+      - "${FRONTEND_PORT:-2025}:2025"
+    volumes:
+      - media:/data/media:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/admin-auth:/etc/nginx/admin-auth:ro
+    mem_limit: 64m
+    depends_on:
+      api: { condition: service_healthy }
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  pgdata:
+  redisdata:
+  media:
+  private_media:
