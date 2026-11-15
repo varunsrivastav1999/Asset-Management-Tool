@@ -266,3 +266,67 @@ def test_bootstrap_generates_password_when_unset(monkeypatch, capsys):
     assert "Generated admin password:" in out
     password = out.split("Generated admin password:")[1].split()[0]
     assert User.objects.get(email="auto@example.com").check_password(password)
+
+
+# --- Deleting / updating menu pages that own tables (regression) ---------------------------
+def test_extra_page_of_a_builtin_table_can_be_deleted_but_the_last_one_cannot(admin_client, asset):
+    extra = admin_client.post(
+        "/api/sidebar-items/",
+        {"name": "Repairs", "type": "page", "route": "/assets?status=in_repair", "table": "assets", "visible_roles": ["admin"]},
+        format="json",
+    )
+    assert extra.status_code == 201, extra.data
+    assert TableDefinition.objects.filter(source="assets").count() == 2
+    # Renaming the extra page works and doesn't touch the original table.
+    upd = admin_client.patch(f"/api/sidebar-items/{extra.data['id']}/", {"name": "In repair", "icon": "wrench"}, format="json")
+    assert upd.status_code == 200 and upd.data["name"] == "In repair"
+    # The data stays reachable through the original Assets page, so the extra page may go.
+    assert admin_client.delete(f"/api/sidebar-items/{extra.data['id']}/").status_code == 204
+    assert TableDefinition.objects.filter(source="assets").count() == 1
+    assert Asset.objects.filter(pk=asset.pk).exists()
+    # …but the last page of a table that still has rows is protected, via either endpoint.
+    last = TableDefinition.objects.get(source="assets")
+    assert admin_client.delete(f"/api/sidebar-items/{last.sidebar_item_id}/").status_code == 400
+    assert admin_client.get(f"/api/table-definitions/{last.id}/delete-check/").data["can_delete"] is False
+
+
+def test_deleting_a_group_holding_every_page_of_a_table_is_blocked(admin_client, asset):
+    group = admin_client.post("/api/sidebar-items/", {"name": "Temp", "type": "group"}, format="json").data
+    original = TableDefinition.objects.get(source="assets").sidebar_item
+    admin_client.patch(f"/api/sidebar-items/{original.id}/", {"parent": group["id"]}, format="json")
+    admin_client.post(
+        "/api/sidebar-items/",
+        {"name": "Repairs", "type": "page", "route": "/assets?status=in_repair", "table": "assets", "parent": group["id"]},
+        format="json",
+    )
+    # Both Assets pages would vanish together, so the group can't be deleted.
+    assert admin_client.delete(f"/api/sidebar-items/{group['id']}/").status_code == 400
+    assert SidebarItem.objects.filter(pk=group["id"]).exists()
+
+
+def test_sidebar_items_full_crud_cycle(admin_client):
+    group = admin_client.post("/api/sidebar-items/", {"name": "Ops", "type": "group", "color": "#16a34a"}, format="json")
+    assert group.status_code == 201, group.data
+    gid = group.data["id"]
+    page = admin_client.post(
+        "/api/sidebar-items/", {"name": "Docs", "type": "link", "url": "https://example.com", "parent": gid}, format="json"
+    )
+    divider = admin_client.post("/api/sidebar-items/", {"type": "divider", "parent": gid}, format="json")
+    assert page.status_code == 201 and divider.status_code == 201, (page.data, divider.data)
+    upd = admin_client.patch(f"/api/sidebar-items/{page.data['id']}/", {"name": "Handbook", "is_active": False}, format="json")
+    assert upd.status_code == 200 and upd.data["name"] == "Handbook" and upd.data["is_active"] is False
+    assert admin_client.delete(f"/api/sidebar-items/{divider.data['id']}/").status_code == 204
+    # Deleting a group removes its children; deleting again is a clean 404.
+    assert admin_client.delete(f"/api/sidebar-items/{gid}/").status_code == 204
+    assert not SidebarItem.objects.filter(pk__in=[gid, page.data["id"]]).exists()
+    assert admin_client.delete(f"/api/sidebar-items/{gid}/").status_code == 404
+
+
+def test_custom_table_rename_and_delete_round_trip(admin_client):
+    d = admin_client.post("/api/table-definitions/", {"name": "Badges", "singular": "Badge"}, format="json").data
+    upd = admin_client.patch(f"/api/table-definitions/{d['id']}/", {"name": "Access badges", "icon": "badge"}, format="json")
+    assert upd.status_code == 200 and SidebarItem.objects.get(pk=d["sidebar_item"]).name == "Access badges"
+    assert admin_client.get(f"/api/table-definitions/{d['id']}/delete-check/").data["can_delete"] is True
+    assert admin_client.delete(f"/api/table-definitions/{d['id']}/").status_code == 204
+    ids = [t["id"] for t in admin_client.get("/api/table-definitions/").data]
+    assert d["id"] not in ids  # the list the UI reloads no longer contains it

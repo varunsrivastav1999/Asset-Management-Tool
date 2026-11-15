@@ -49,7 +49,9 @@ export const useUiStore = defineStore('ui', () => {
     try {
       const result = await state.action(payload)
       confirmState.value = null
-      state.resolve(result ?? true)
+      // A successful action always resolves truthy: DELETE answers 204 with an empty body (''), which
+      // callers would otherwise read as "cancelled" and skip their refresh, leaving deleted rows on screen.
+      state.resolve(result === undefined || result === null || result === '' || result === false ? true : result)
     } catch (e) {
       state.loading = false
       state.error = parseError(e).message

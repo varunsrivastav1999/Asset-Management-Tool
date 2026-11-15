@@ -98,8 +98,9 @@ class SidebarItemViewSet(AuditedViewSetMixin, viewsets.ModelViewSet):
             if defn:
                 owned.append(defn)
             stack.extend(node.children.all())
+        owned_ids = [d.pk for d in owned]
         for defn in owned:
-            blocker = delete_blocker(defn)
+            blocker = delete_blocker(defn, deleting=owned_ids)
             if blocker:
                 raise DomainError(blocker, code="has_data")
         for defn in owned:

@@ -150,9 +150,14 @@ async function makePrimary(p) {
 }
 async function deletePhoto(p) {
   if (!(await ui.confirm({ title: 'Delete photo?', confirmText: 'Delete', danger: true }))) return
-  await assetsApi.deletePhoto(asset.value.id, p.id)
-  photoOpen.value = null
-  asset.value = await assetsApi.get(asset.value.id)
+  try {
+    await assetsApi.deletePhoto(asset.value.id, p.id)
+    ui.success('Photo deleted')
+    photoOpen.value = null
+    asset.value = await assetsApi.get(asset.value.id)
+  } catch (e) {
+    ui.error(parseError(e).message)
+  }
 }
 
 async function remove() {

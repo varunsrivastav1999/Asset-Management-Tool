@@ -137,6 +137,29 @@ describe('ui.confirm with an async action', () => {
   })
 })
 
+describe('ui.confirm after a DELETE (204, empty body)', () => {
+  it.each([[''], [undefined], [null]])('resolves truthy when the action returns %j so the caller refreshes', async (body) => {
+    mountAttached(ConfirmHost)
+    const ui = useUiStore()
+    const p = ui.confirm({ title: 'Delete?', danger: true, action: async () => body })
+    await nextTick()
+    await ui.acceptConfirm()
+    await expect(p).resolves.toBe(true)
+    expect(ui.confirmState).toBeNull()
+  })
+
+  it('still resolves false on cancel', async () => {
+    mountAttached(ConfirmHost)
+    const ui = useUiStore()
+    const action = vi.fn()
+    const p = ui.confirm({ title: 'Delete?', action })
+    await nextTick()
+    ui.resolveConfirm(false)
+    await expect(p).resolves.toBe(false)
+    expect(action).not.toHaveBeenCalled()
+  })
+})
+
 describe('ConfigurableTable bulk actions', () => {
   const columns = [
     { key: 'sno', name: 'S.No', type: 'auto_number', is_builtin: true },

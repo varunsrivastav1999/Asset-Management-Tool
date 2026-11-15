@@ -52,7 +52,17 @@ def row_count(defn: TableDefinition) -> int:
     return qs.count()
 
 
-def delete_blocker(defn: TableDefinition) -> str | None:
+def delete_blocker(defn: TableDefinition, deleting=()) -> str | None:
+    """Why `defn` can't be deleted, or None.
+
+    Built-in data (assets, people…) isn't owned by one page: another menu page showing the same table keeps it
+    reachable, so only the last page of a built-in table is protected. `deleting` lists definition ids removed in
+    the same operation (e.g. a whole menu group), which don't count as "another page".
+    """
+    if defn.source != CUSTOM:
+        others = TableDefinition.objects.filter(source=defn.source).exclude(pk=defn.pk).exclude(pk__in=list(deleting))
+        if others.exists():
+            return None
     n = row_count(defn)
     if not n:
         return None
