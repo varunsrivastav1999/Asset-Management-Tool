@@ -32,8 +32,9 @@ const routes = [
       { path: 'reminders', name: 'reminders', component: () => import('@/views/RemindersView.vue'), meta: { title: 'Reminders', roles: ['manager'] } },
       { path: 'notifications', name: 'notifications', component: () => import('@/views/NotificationsView.vue'), meta: { title: 'Notifications' } },
       { path: 'audit', name: 'audit', component: () => import('@/views/AuditLogView.vue'), meta: { title: 'Audit log', roles: ['admin'] } },
-      { path: 'settings/sidebar', name: 'settings-sidebar', component: () => import('@/views/settings/SidebarSettingsView.vue'), meta: { title: 'Sidebar settings', roles: ['admin'] } },
-      { path: 'settings/tables', name: 'settings-tables', component: () => import('@/views/settings/TablesSettingsView.vue'), meta: { title: 'Tables', roles: ['admin'] } },
+      { path: 'settings/sidebar', name: 'settings-sidebar', component: () => import('@/views/settings/SidebarSettingsView.vue'), meta: { title: 'Sidebar & tables', roles: ['admin'] } },
+      // Tables now live in Settings → Sidebar & tables (old links keep working).
+      { path: 'settings/tables', redirect: { path: '/settings/sidebar', query: { tab: 'tables' } } },
       { path: 'settings/backups', name: 'settings-backups', component: () => import('@/views/settings/BackupsView.vue'), meta: { title: 'Backups', roles: ['admin'] } },
       { path: 't/:slug', name: 'records', component: () => import('@/views/RecordsView.vue'), meta: { title: 'Table' } },
       { path: 'settings/dashboard', name: 'settings-dashboard', component: () => import('@/views/settings/DashboardSettingsView.vue'), meta: { title: 'Dashboard settings', roles: ['admin'] } },

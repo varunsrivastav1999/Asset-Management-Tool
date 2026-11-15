@@ -1,4 +1,5 @@
 <script setup>
+import { inSentence } from '@/utils/format'
 import ReminderButton from '@/components/reminders/ReminderButton.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Columns3, Pencil, Plus, Trash2 } from 'lucide-vue-next'
@@ -85,7 +86,7 @@ async function save() {
 
 async function remove(row) {
   const ok = await ui.confirm({
-    title: `Delete ${names.value.singular.toLowerCase()} “${row.name}”?`,
+    title: `Delete ${inSentence(names.value.singular)} “${row.name}”?`,
     message: 'This cannot be undone. Records still referenced elsewhere cannot be deleted — deactivate them instead.',
     confirmText: 'Delete',
     danger: true,
@@ -142,7 +143,7 @@ const extra = props.canWrite ? [{ key: '_actions', label: '', align: 'right', mo
             </div>
           </template>
           <template #empty>
-            <EmptyState :icon="icon || undefined" :title="`No ${names.plural.toLowerCase()} yet`">
+            <EmptyState :icon="icon || undefined" :title="`No ${inSentence(names.plural)} yet`">
               <AppButton v-if="canWrite" :icon="Plus" @click="openForm()">Add {{ names.singular }}</AppButton>
             </EmptyState>
           </template>
@@ -152,7 +153,7 @@ const extra = props.canWrite ? [{ key: '_actions', label: '', align: 'right', mo
     </div>
 
     <ColumnsPanel v-model:open="columnsOpen" :cfg="cfg" :title="`${names.plural} columns`" />
-    <AppModal v-model:open="open" :title="`${editing ? 'Edit' : 'Add'} ${names.singular.toLowerCase()}`">
+    <AppModal v-model:open="open" :title="`${editing ? 'Edit' : 'Add'} ${inSentence(names.singular)}`">
       <form id="crud-form" class="grid gap-4 sm:grid-cols-2" @submit.prevent="save">
         <template v-for="f in fields" :key="f.key">
           <AppSelect v-if="f.type === 'select'" v-model="form[f.key]" :class="f.span && 'sm:col-span-2'" :label="f.label" :options="f.options" :required="f.required" :error="errors[f.key]" />

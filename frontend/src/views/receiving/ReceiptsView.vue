@@ -1,4 +1,5 @@
 <script setup>
+import { inSentence } from '@/utils/format'
 import ReminderButton from '@/components/reminders/ReminderButton.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -72,7 +73,7 @@ const bulkConfig = computed(() => ({
             <AppButton size="sm" variant="ghost" :icon="FileText" @click.stop="downloadFile(`/receipts/${row.id}/pdf/`, { open: true })">PDF</AppButton>
           </template>
           <template #empty>
-            <EmptyState :icon="PackagePlus" :title="`No ${names.plural.toLowerCase()} yet`" message="Record deliveries from suppliers to add assets in bulk.">
+            <EmptyState :icon="PackagePlus" :title="`No ${inSentence(names.plural)} yet`" message="Record deliveries from suppliers to add assets in bulk.">
               <AppButton :icon="Plus" to="/receiving/new">Add {{ names.singular }}</AppButton>
             </EmptyState>
           </template>

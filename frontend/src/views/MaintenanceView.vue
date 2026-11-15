@@ -18,7 +18,7 @@ import AppPagination from '@/components/ui/AppPagination.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import MaintenanceFormModal from '@/components/workflows/MaintenanceFormModal.vue'
-import { formatDate } from '@/utils/format'
+import { formatDate, inSentence } from '@/utils/format'
 
 const ui = useUiStore()
 const notes = useNotificationsStore()
@@ -146,7 +146,7 @@ const bulkConfig = computed(() => ({
             </div>
           </template>
           <template #empty>
-            <EmptyState :icon="Wrench" :title="`No ${names.plural.toLowerCase()} here`" message="Schedule preventive service or log a repair."><AppButton :icon="Plus" @click="create">Schedule</AppButton></EmptyState>
+            <EmptyState :icon="Wrench" :title="`No ${inSentence(names.plural)} here`" message="Schedule preventive service or log a repair."><AppButton :icon="Plus" @click="create">Schedule</AppButton></EmptyState>
           </template>
         </ConfigurableTable>
         <AppPagination v-model="list.page.value" :pages="list.pages.value" :count="list.count.value" />

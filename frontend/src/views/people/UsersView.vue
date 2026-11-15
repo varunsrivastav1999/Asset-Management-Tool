@@ -1,4 +1,5 @@
 <script setup>
+import { inSentence } from '@/utils/format'
 import ReminderButton from '@/components/reminders/ReminderButton.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -155,7 +156,7 @@ const bulkConfig = computed(() => ({
             </div>
           </template>
           <template #cell-role="{ row }"><AppBadge :tone="roleTone[row.role]">{{ row.role }}</AppBadge></template>
-          <template #empty><EmptyState :icon="Users" :title="`No ${names.plural.toLowerCase()} match`" /></template>
+          <template #empty><EmptyState :icon="Users" :title="`No ${inSentence(names.plural)} match`" /></template>
         </ConfigurableTable>
         <AppPagination v-model="list.page.value" :pages="list.pages.value" :count="list.count.value" />
       </div>

@@ -35,7 +35,7 @@ import AppModal from '@/components/ui/AppModal.vue'
 import ChangeStatusModal from '@/components/assets/ChangeStatusModal.vue'
 import AssetTimeline from '@/components/assets/AssetTimeline.vue'
 import MaintenanceFormModal from '@/components/workflows/MaintenanceFormModal.vue'
-import { daysUntil, formatDate, formatDateTime, formatMoney } from '@/utils/format'
+import { daysUntil, formatDate, formatDateTime, formatMoney, inSentence } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -206,8 +206,8 @@ const assetNames = useTableNames('assets', { plural: 'Assets', singular: 'Asset'
     </div>
 
     <div v-else-if="error" class="card mx-auto max-w-md">
-      <EmptyState :title="error === 'not-found' ? `${assetNames.singular} not found` : `Could not load ${assetNames.singular.toLowerCase()}`" :message="error === 'not-found' ? 'It may have been deleted, or you do not have access.' : error">
-        <AppButton :to="assetNames.route">Back to {{ assetNames.plural.toLowerCase() }}</AppButton>
+      <EmptyState :title="error === 'not-found' ? `${assetNames.singular} not found` : `Could not load ${inSentence(assetNames.singular)}`" :message="error === 'not-found' ? 'It may have been deleted, or you do not have access.' : error">
+        <AppButton :to="assetNames.route">Back to {{ inSentence(assetNames.plural) }}</AppButton>
       </EmptyState>
     </div>
 

@@ -25,8 +25,8 @@ def test_default_sidebar_is_seeded_by_migration():
     "client_fixture,visible,hidden",
     [
         ("employee_client", ["Dashboard", "Assets", "Handovers"], ["Receiving", "Catalog", "People", "Audit log", "Settings"]),
-        ("manager_client", ["Receiving", "Categories", "People"], ["Audit log", "Settings", "Sidebar"]),
-        ("admin_client", ["Audit log", "Settings", "Sidebar", "Dashboard"], []),
+        ("manager_client", ["Receiving", "Categories", "People"], ["Audit log", "Settings", "Sidebar & tables"]),
+        ("admin_client", ["Audit log", "Settings", "Sidebar & tables", "Dashboard"], []),
     ],
 )
 def test_sidebar_is_filtered_by_role(request, client_fixture, visible, hidden):
@@ -126,7 +126,7 @@ def test_reorder_rejects_cycles_and_non_group_parents(admin_client):
 def test_reset_restores_defaults(admin_client, manager_client):
     SidebarItem.objects.all().delete()
     assert manager_client.post("/api/sidebar-items/reset/").status_code == 403
-    assert admin_client.post("/api/sidebar-items/reset/").data["created"] == 22
+    assert admin_client.post("/api/sidebar-items/reset/").data["created"] == 21
     assert admin_client.get("/api/sidebar-items/tree/").data["items"][0]["name"] == "Overview"
 
 

@@ -382,7 +382,7 @@ def test_rule_crud_permissions_and_audit(admin_client, manager_client, employee_
     assert res.status_code == 201, res.data
     assert res.data["next_run_at"] and res.data["trigger_config"]["days"] == [30, 7]
     assert AuditLog.objects.filter(model="reminders.reminderrule", action="create").exists()
-    admin_only = SidebarItem.objects.get(route="/settings/tables")
+    admin_only = SidebarItem.objects.get(route="/settings/backups")
     admin_only.table = "assets"
     admin_only.save()
     assert manager_client.post("/api/reminders/rules/", rule_payload(admin_only, template), format="json").status_code == 400

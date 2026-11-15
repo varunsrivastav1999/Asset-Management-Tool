@@ -1,4 +1,5 @@
 <script setup>
+import { inSentence } from '@/utils/format'
 import ReminderButton from '@/components/reminders/ReminderButton.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -105,7 +106,7 @@ const bulkConfig = computed(() => ({
           </template>
           <template #cell-actions="{ row }"><AppButton size="sm" variant="ghost" :icon="FileText" aria-label="PDF receipt" @click.stop="downloadFile(`/handovers/${row.id}/pdf/`, { open: true })" /></template>
           <template #empty>
-            <EmptyState :icon="ArrowLeftRight" :title="tab === 'mine' ? 'Nothing awaiting your signature' : `No ${names.plural.toLowerCase()}`" :message="tab === 'mine' ? 'You are all caught up.' : undefined">
+            <EmptyState :icon="ArrowLeftRight" :title="tab === 'mine' ? 'Nothing awaiting your signature' : `No ${inSentence(names.plural)}`" :message="tab === 'mine' ? 'You are all caught up.' : undefined">
               <AppButton v-if="auth.isManager && tab !== 'mine'" :icon="Plus" to="/handovers/new">New handover</AppButton>
             </EmptyState>
           </template>

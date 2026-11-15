@@ -183,7 +183,15 @@ class SidebarItemViewSet(AuditedViewSetMixin, viewsets.ModelViewSet):
     @extend_schema(request=None, responses={200: dict})
     @action(detail=False, methods=["post"])
     def reset(self, request):
-        created = seed_sidebar(SidebarItem, replace=True)
+        from .definitions import ensure_definition
+        from .tables import ensure_columns
+
+        with transaction.atomic():
+            created = seed_sidebar(SidebarItem, replace=True)
+            # Same end state as a first start: every table page has its definition and column setup.
+            for item in SidebarItem.objects.filter(item_type=SidebarItem.Type.PAGE).exclude(table=""):
+                ensure_definition(item)
+                ensure_columns(item)
         record(AuditLog.Action.BULK_UPDATE, request.user, model="navigation.sidebaritem", object_repr="Sidebar reset to defaults")
         broadcast_sidebar_change()
         return Response({"created": created}, status=status.HTTP_200_OK)

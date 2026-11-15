@@ -58,9 +58,10 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       host: true,
       proxy: {
-        '/api': { target, changeOrigin: false },
-        '/media': { target, changeOrigin: false },
-        '/ws': { target: target.replace(/^http/, 'ws'), ws: true },
+        // VITE_PROXY_TARGET may point at the Docker stack (https://localhost:2025, self-signed in dev).
+        '/api': { target, changeOrigin: false, secure: false },
+        '/media': { target, changeOrigin: false, secure: false },
+        '/ws': { target: target.replace(/^http/, 'ws'), ws: true, secure: false },
       },
     },
     build: {

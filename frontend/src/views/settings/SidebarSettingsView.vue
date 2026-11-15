@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { onBeforeRouteLeave, useRouter } from 'vue-router'
-import { PanelLeft, Plus, RotateCcw, Save, Undo2 } from 'lucide-vue-next'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { PanelLeft, Plus, RotateCcw, Save, Table2, Undo2 } from 'lucide-vue-next'
 import { sidebarApi, tablesApi } from '@/api'
 import { parseError } from '@/api/http'
 import { useSidebarStore } from '@/stores/sidebar'
@@ -17,10 +17,35 @@ import RoleChecklist from '@/components/settings/RoleChecklist.vue'
 import SidebarTreeEditor from '@/components/settings/SidebarTreeEditor.vue'
 import SidebarNav from '@/components/SidebarNav.vue'
 import ColorField from '@/components/settings/ColorField.vue'
+import TablesManager from '@/components/settings/TablesManager.vue'
 
 const ui = useUiStore()
 const sidebar = useSidebarStore()
 const router = useRouter()
+const route = useRoute()
+
+// Menu and tables are one concept (every table is a menu page), managed on one screen with two tabs.
+const TABS = [
+  { key: 'menu', label: 'Menu', icon: PanelLeft },
+  { key: 'tables', label: 'Tables', icon: Table2 },
+]
+const tab = computed({
+  get: () => (route.query.tab === 'tables' ? 'tables' : 'menu'),
+  set: (key) => router.replace({ query: { ...route.query, tab: key === 'menu' ? undefined : key } }),
+})
+const tablesRef = ref(null)
+/** Every menu group, for placing a new table (the edit-form `groups` list hides the item being edited). */
+const menuGroups = computed(() => {
+  const out = []
+  const walk = (nodes, depth) =>
+    nodes.forEach((n) => {
+      if (n.type !== 'group') return
+      out.push({ value: n.id, label: `${'— '.repeat(depth)}${n.name}` })
+      walk(n.children || [], depth + 1)
+    })
+  walk(tree.value, 0)
+  return out
+})
 
 const tree = ref([])
 const loading = ref(true)
@@ -45,6 +70,13 @@ async function load() {
     loading.value = false
   }
 }
+/** After a menu change: reload the tree, the Tables tab (pages can own tables) and everyone's live menu. */
+async function refreshAll() {
+  await load()
+  tablesRef.value?.reload()
+  sidebar.load()
+}
+
 onMounted(async () => {
   load()
   tableOptions.value = (await tablesApi.registry().catch(() => ({ tables: [] }))).tables.map((t) => ({ value: t.key, label: `${t.label} table` }))
@@ -130,8 +162,7 @@ async function save() {
     editing.value ? await sidebarApi.update(editing.value.id, payload) : await sidebarApi.create(payload)
     ui.success(editing.value ? 'Item updated' : 'Item added')
     open.value = false
-    await load()
-    sidebar.load()
+    await refreshAll()
   } catch (e) {
     const { message, fields } = parseError(e)
     errors.value = fields
@@ -141,32 +172,48 @@ async function save() {
   }
 }
 
+function countNested(item) {
+  return (item.children || []).reduce((n, c) => n + 1 + countNested(c), 0)
+}
+
+function tablesUnder(item) {
+  const own = item.type === 'page' && item.table ? [item.table_meta?.name || item.name] : []
+  return own.concat(...(item.children || []).map(tablesUnder))
+}
+
 async function remove(item) {
-  const nested = item.type === 'group' && item.children?.length
+  const nested = item.type === 'group' ? countNested(item) : 0
+  const tables = tablesUnder(item)
+  const parts = [nested ? `This group and its ${nested} item(s) are removed from everyone's menu.` : "It disappears from everyone's menu."]
+  if (tables.length)
+    parts.push(
+      `${tables.length === 1 ? `The table “${tables[0]}” is` : `The tables ${tables.map((t) => `“${t}”`).join(', ')} are`} removed with it, including column settings. ` +
+        "This isn't allowed while a table still has rows (archive or move them first); built-in data such as assets is never deleted.",
+    )
   const ok = await ui.confirm({
     title: `Delete ${item.name || 'divider'}?`,
-    message: nested ? `This group and its ${item.children.length} item(s) will be removed from the menu.` : 'It will disappear from everyone’s menu.',
-    confirmText: 'Delete',
+    message: parts.join('\n\n'),
+    confirmText: tables.length ? 'Delete page and table' : 'Delete',
     danger: true,
+    action: () => sidebarApi.remove(item.id), // a "has rows" refusal is shown inside the dialog
   })
   if (!ok) return
-  try {
-    await sidebarApi.remove(item.id)
-    ui.success('Item deleted')
-    open.value = false
-    await load()
-    sidebar.load()
-  } catch (e) {
-    ui.error(parseError(e).message)
-  }
+  ui.success('Item deleted')
+  open.value = false
+  refreshAll()
 }
 
 async function reset() {
-  if (!(await ui.confirm({ title: 'Reset sidebar to defaults?', message: 'All custom items and ordering are replaced with the default menu.', confirmText: 'Reset', danger: true }))) return
-  await sidebarApi.reset()
+  const ok = await ui.confirm({
+    title: 'Reset sidebar to defaults?',
+    message: 'All custom items and ordering are replaced with the default menu. Tables you created are kept.',
+    confirmText: 'Reset',
+    danger: true,
+    action: () => sidebarApi.reset(),
+  })
+  if (!ok) return
   ui.success('Sidebar reset')
-  await load()
-  sidebar.load()
+  refreshAll()
 }
 
 /** Live preview of the item being edited, rendered in both themes. */
@@ -220,16 +267,36 @@ onBeforeRouteLeave(async () => !dirty.value || (await ui.confirm({ title: 'Disca
 
 <template>
   <div>
-    <PageHeader title="Sidebar settings" subtitle="Drag items to reorder or move them between groups, then save. Everyone's menu updates live.">
-      <template #actions>
+    <PageHeader
+      title="Sidebar & tables"
+      :subtitle="tab === 'menu' ? 'Drag items to reorder or move them between groups, then save. Everyone\'s menu updates live.' : 'Every table is a page in the menu: rename tables, create your own, or remove them.'"
+    >
+      <template v-if="tab === 'menu'" #actions>
         <AppButton variant="ghost" :icon="RotateCcw" @click="reset">Reset</AppButton>
         <AppButton variant="secondary" :icon="Plus" @click="openForm()">Add item</AppButton>
         <AppButton :icon="Save" :disabled="!dirty" :loading="savingOrder" @click="saveOrder">Save order</AppButton>
       </template>
     </PageHeader>
 
+    <div class="mb-4 inline-flex rounded-2xl border border-line p-1" role="tablist" aria-label="Sidebar settings sections">
+      <button
+        v-for="t in TABS"
+        :key="t.key"
+        type="button"
+        role="tab"
+        :aria-selected="tab === t.key"
+        class="flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-medium transition"
+        :class="tab === t.key ? 'bg-primary-soft text-primary' : 'text-muted hover:text-ink'"
+        @click="tab = t.key"
+      >
+        <component :is="t.icon" class="h-4 w-4" aria-hidden="true" />{{ t.label }}
+      </button>
+    </div>
+
+    <TablesManager v-show="tab === 'tables'" ref="tablesRef" :groups="menuGroups" @changed="load" />
+
     <Transition name="fade">
-      <div v-if="dirty" class="glass-strong sticky top-[4.5rem] z-10 mb-3 flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm">
+      <div v-if="tab === 'menu' && dirty" class="glass-strong sticky top-[4.5rem] z-10 mb-3 flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm">
         <span class="h-2 w-2 animate-pulse rounded-full bg-warning" /> Unsaved order changes
         <div class="ml-auto flex gap-2">
           <AppButton size="sm" variant="ghost" :icon="Undo2" @click="load">Discard</AppButton>
@@ -238,7 +305,7 @@ onBeforeRouteLeave(async () => !dirty.value || (await ui.confirm({ title: 'Disca
       </div>
     </Transition>
 
-    <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div v-show="tab === 'menu'" class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       <section class="card min-w-0 p-3 sm:p-4">
         <div v-if="loading" class="space-y-2"><div v-for="i in 8" :key="i" class="skeleton h-12" /></div>
         <EmptyState v-else-if="!tree.length" :icon="PanelLeft" title="The sidebar is empty" message="Add items or restore the default menu.">

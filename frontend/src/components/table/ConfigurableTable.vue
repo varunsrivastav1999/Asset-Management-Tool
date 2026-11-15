@@ -1,4 +1,5 @@
 <script setup>
+import { inSentence } from '@/utils/format'
 import { computed, ref, useSlots, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import { ChevronDown, Download, RefreshCcw, Trash2, X } from 'lucide-vue-next'
@@ -77,7 +78,7 @@ function clearSelection() {
   selected.value = []
 }
 
-const noun = (n) => (n === 1 ? props.bulk?.singular || 'row' : props.bulk?.plural || 'rows').toLowerCase()
+const noun = (n) => inSentence(n === 1 ? props.bulk?.singular || 'row' : props.bulk?.plural || 'rows')
 const params = () => {
   const { page: _p, page_size: _ps, with_columns: _w, ...rest } = props.bulk?.params?.() || {}
   return rest
@@ -166,8 +167,8 @@ onClickOutside(exportMenu, () => (exportOpen.value = false))
             <button v-for="opt in [
               { scope: 'filtered', fmt: 'csv', label: 'Current view (CSV)' },
               { scope: 'filtered', fmt: 'xlsx', label: 'Current view (Excel)' },
-              { scope: 'all', fmt: 'csv', label: `All ${bulk.plural?.toLowerCase() || 'rows'} (CSV)` },
-              { scope: 'all', fmt: 'xlsx', label: `All ${bulk.plural?.toLowerCase() || 'rows'} (Excel)` },
+              { scope: 'all', fmt: 'csv', label: `All ${(bulk.plural ? inSentence(bulk.plural) : 'rows')} (CSV)` },
+              { scope: 'all', fmt: 'xlsx', label: `All ${(bulk.plural ? inSentence(bulk.plural) : 'rows')} (Excel)` },
             ]" :key="opt.label" role="menuitem" class="block w-full rounded-xl px-3 py-2 text-left hover:bg-surface-hover" @click="exportOpen = false; exportRows(opt.scope, opt.fmt)">{{ opt.label }}</button>
             <p class="px-3 pt-1 pb-1.5 text-[11px] text-muted">Uses your visible columns and their names.</p>
           </div>

@@ -53,3 +53,17 @@ describe('currency defaults', () => {
     expect(formatMoney(99.5, 'USD')).toContain('99.50') // per-asset currencies still work
   })
 })
+
+describe('inSentence', () => {
+  it.each([
+    ['Assets', 'assets'],
+    ['Asset tags', 'asset tags'],
+    ['QA Busy', 'QA Busy'],
+    ['IT kit', 'IT kit'],
+    ['PCs', 'PCs'],
+    ['', ''],
+  ])('%s → %s', async (name, out) => {
+    const { inSentence } = await import('@/utils/format')
+    expect(inSentence(name)).toBe(out)
+  })
+})

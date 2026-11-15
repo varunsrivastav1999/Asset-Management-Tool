@@ -25,7 +25,7 @@ import CategoryIcon from '@/components/ui/CategoryIcon.vue'
 import EntityPicker from '@/components/ui/EntityPicker.vue'
 import ImportModal from '@/components/assets/ImportModal.vue'
 import { ASSET_STATUS, CONDITIONS } from '@/utils/constants'
-import { daysUntil } from '@/utils/format'
+import { daysUntil, inSentence } from '@/utils/format'
 
 const auth = useAuthStore()
 const ui = useUiStore()
@@ -91,7 +91,7 @@ async function applyBulk() {
   busy.value = true
   try {
     const res = await assetsApi.bulkUpdate(data)
-    ui.success(`${res.updated} ${names.value.plural.toLowerCase()} updated`)
+    ui.success(`${res.updated} ${inSentence(names.value.plural)} updated`)
     bulkOpen.value = false
     selected.value = []
     list.load()
@@ -123,8 +123,8 @@ const catOptions = computed(() => categories.value.map((c) => ({ value: String(c
 <template>
   <div>
     <PageHeader
-      :title="auth.isManager ? names.plural : `My ${names.plural.toLowerCase()}`"
-      :subtitle="names.description || `${list.count.value} ${(list.count.value === 1 ? names.singular : names.plural).toLowerCase()}`"
+      :title="auth.isManager ? names.plural : `My ${inSentence(names.plural)}`"
+      :subtitle="names.description || `${list.count.value} ${inSentence(list.count.value === 1 ? names.singular : names.plural)}`"
     >
       <template #actions>
         <ReminderButton :section="cfg.pageItemId.value" />
@@ -236,8 +236,8 @@ const catOptions = computed(() => categories.value.map((c) => ({ value: String(c
         </template>
         <template #empty>
           <EmptyState
-            :title="`No ${names.plural.toLowerCase()} found`"
-            :message="activeFilterCount || filters.search ? 'Try adjusting the filters.' : auth.isManager ? `Add your first ${names.singular.toLowerCase()} or import a spreadsheet.` : `No ${names.plural.toLowerCase()} are assigned to you yet.`"
+            :title="`No ${inSentence(names.plural)} found`"
+            :message="activeFilterCount || filters.search ? 'Try adjusting the filters.' : auth.isManager ? `Add your first ${inSentence(names.singular)} or import a spreadsheet.` : `No ${inSentence(names.plural)} are assigned to you yet.`"
           >
             <AppButton v-if="auth.isManager && !activeFilterCount" :icon="Plus" to="/assets/new">Add {{ names.singular }}</AppButton>
           </EmptyState>
@@ -249,7 +249,7 @@ const catOptions = computed(() => categories.value.map((c) => ({ value: String(c
     <ImportModal v-model:open="importOpen" @imported="list.load()" />
     <ColumnsPanel v-model:open="columnsOpen" :cfg="cfg" :title="`${names.plural} columns`" />
 
-    <AppModal v-model:open="bulkOpen" :title="`Bulk edit ${selected.length} ${(selected.length === 1 ? names.singular : names.plural).toLowerCase()}`" size="sm">
+    <AppModal v-model:open="bulkOpen" :title="`Bulk edit ${selected.length} ${inSentence(selected.length === 1 ? names.singular : names.plural)}`" size="sm">
       <div class="space-y-4">
         <EntityPicker v-model="bulk.location" label="Move to location" :fetcher="pick.locations" placeholder="Keep current" />
         <AppSelect v-model="bulk.condition" label="Set condition" placeholder="Keep current" :options="CONDITIONS" />

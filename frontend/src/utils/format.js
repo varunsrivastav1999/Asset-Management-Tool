@@ -91,3 +91,15 @@ export function todayISO() {
 export function cleanParams(obj) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== '' && v !== null && v !== undefined && !(Array.isArray(v) && !v.length)))
 }
+
+/**
+ * A name as it reads mid-sentence: "Assets" → "assets", but acronyms and proper names typed by an admin keep
+ * their capitals ("QA Busy", "IT kit", "PCs" stay as they are).
+ */
+export function inSentence(name) {
+  const s = String(name ?? '')
+  if (s.length < 2) return s.toLowerCase()
+  const firstWord = s.split(/\s+/)[0]
+  const hasInnerCapital = /[A-Z]/.test(firstWord.slice(1))
+  return hasInnerCapital ? s : s[0].toLowerCase() + s.slice(1)
+}

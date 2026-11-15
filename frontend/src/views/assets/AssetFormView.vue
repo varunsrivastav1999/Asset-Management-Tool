@@ -15,7 +15,7 @@ import AppSelect from '@/components/ui/AppSelect.vue'
 import EntityPicker from '@/components/ui/EntityPicker.vue'
 import CustomFieldInputs from '@/components/assets/CustomFieldInputs.vue'
 import { CONDITIONS } from '@/utils/constants'
-import { todayISO } from '@/utils/format'
+import { todayISO, inSentence } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -115,8 +115,8 @@ const assetNames = useTableNames('assets', { plural: 'Assets', singular: 'Asset'
 <template>
   <form class="mx-auto max-w-4xl" novalidate @submit.prevent="save">
     <PageHeader
-      :title="editing ? `Edit ${assetNames.singular.toLowerCase()}` : `Add ${assetNames.singular}`"
-      :subtitle="editing ? undefined : `Register a single ${assetNames.singular.toLowerCase()}. Use Receiving for batches from a supplier.`"
+      :title="editing ? `Edit ${inSentence(assetNames.singular)}` : `Add ${assetNames.singular}`"
+      :subtitle="editing ? undefined : `Register a single ${inSentence(assetNames.singular)}. Use Receiving for batches from a supplier.`"
       :crumbs="[{ label: assetNames.plural, to: assetNames.route }, ...(editing ? [{ label: 'Details', to: `/assets/${id}` }] : []), { label: editing ? 'Edit' : 'New' }]"
     >
       <template #actions>
@@ -175,7 +175,7 @@ const assetNames = useTableNames('assets', { plural: 'Assets', singular: 'Asset'
       <div class="safe-bottom sticky bottom-20 z-10 flex justify-end gap-2 lg:bottom-4">
         <div class="glass-strong flex gap-2 rounded-2xl p-2">
           <AppButton variant="secondary" :to="editing ? `/assets/${id}` : '/assets'">Cancel</AppButton>
-          <AppButton type="submit" :icon="Save" :loading="saving">{{ editing ? 'Save changes' : `Create ${assetNames.singular.toLowerCase()}` }}</AppButton>
+          <AppButton type="submit" :icon="Save" :loading="saving">{{ editing ? 'Save changes' : `Create ${inSentence(assetNames.singular)}` }}</AppButton>
         </div>
       </div>
     </div>

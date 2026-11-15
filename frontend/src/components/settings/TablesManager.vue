@@ -2,11 +2,10 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ExternalLink, Pencil, Plus, Table2, Trash2, X } from 'lucide-vue-next'
-import { definitionsApi, sidebarApi } from '@/api'
+import { definitionsApi } from '@/api'
 import { parseError } from '@/api/http'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useUiStore } from '@/stores/ui'
-import PageHeader from '@/components/ui/PageHeader.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppInput from '@/components/ui/AppInput.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
@@ -19,11 +18,18 @@ import RoleChecklist from '@/components/settings/RoleChecklist.vue'
 import { iconFor } from '@/utils/icons'
 import { COLUMN_TYPES, hasOptions, optionsPlaceholder, parseOptions } from '@/utils/columnTypes'
 
+/**
+ * Tables behind menu pages: rename built-in tables, create and delete custom ones.
+ * Lives in Settings → Sidebar & tables; `groups` (menu groups for placing a new table) comes from the menu tree
+ * there, and `changed` tells it to reload that tree after a table is created, renamed, moved or deleted.
+ */
+defineProps({ groups: { type: Array, default: () => [] } })
+const emit = defineEmits(['changed'])
+
 const ui = useUiStore()
 const sidebar = useSidebarStore()
 const router = useRouter()
 const tables = ref([])
-const groups = ref([])
 const loading = ref(true)
 
 async function load() {
@@ -36,14 +42,8 @@ async function load() {
     loading.value = false
   }
 }
-onMounted(async () => {
-  load()
-  const tree = (await sidebarApi.tree()).items
-  const out = []
-  const walk = (nodes, depth) => nodes.forEach((n) => n.type === 'group' && (out.push({ value: n.id, label: `${'— '.repeat(depth)}${n.name}` }), walk(n.children || [], depth + 1)))
-  walk(tree, 0)
-  groups.value = out
-})
+onMounted(load)
+defineExpose({ reload: load, openForm })
 
 const TYPES = COLUMN_TYPES
 
@@ -86,6 +86,7 @@ async function save() {
     ui.success(editing.value ? `“${t.name}” updated` : `Table “${t.name}” created`)
     open.value = false
     await Promise.all([load(), sidebar.load()])
+    emit('changed')
     if (!editing.value) router.push(t.route)
   } catch (e) {
     const { message, fields } = parseError(e)
@@ -116,8 +117,8 @@ async function remove(t) {
   })
   if (ok) {
     ui.success(`Table “${t.name}” deleted`)
-    load()
-    sidebar.load()
+    await Promise.all([load(), sidebar.load()])
+    emit('changed')
   }
 }
 
@@ -125,7 +126,7 @@ const columns = [
   { key: 'name', label: 'Table' },
   { key: 'source', label: 'Type' },
   { key: 'row_count', label: 'Rows', align: 'right' },
-  { key: 'route', label: 'Page', class: 'hidden md:table-cell' },
+  { key: 'route', label: 'Page', class: 'hidden xl:table-cell' }, // keeps the actions on screen on laptops
   { key: 'actions', label: '', align: 'right', mobile: false },
 ]
 const singularHint = computed(() => (form.name ? `Used in buttons: “Add ${form.singular || form.name}”` : 'e.g. Equipment item'))
@@ -133,9 +134,10 @@ const singularHint = computed(() => (form.name ? `Used in buttons: “Add ${form
 
 <template>
   <div>
-    <PageHeader title="Tables" subtitle="Rename any table, or create your own. Names update in the menu, page titles, buttons and empty states.">
-      <template #actions><AppButton :icon="Plus" @click="openForm()">New table</AppButton></template>
-    </PageHeader>
+    <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+      <p class="min-w-0 flex-1 text-sm text-muted">Rename any table, or create your own. Names update in the menu, page titles, buttons and empty states. A table with rows can't be deleted until they're archived or moved.</p>
+      <AppButton class="shrink-0" :icon="Plus" @click="openForm()">New table</AppButton>
+    </div>
     <div class="card p-2 sm:p-3">
       <DataTable :columns="columns" :rows="tables" :loading="loading" clickable @row-click="openForm">
         <template #cell-name="{ row }">

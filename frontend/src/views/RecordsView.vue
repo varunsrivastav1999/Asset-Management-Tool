@@ -1,4 +1,5 @@
 <script setup>
+import { inSentence } from '@/utils/format'
 import ReminderButton from '@/components/reminders/ReminderButton.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -93,7 +94,7 @@ const saveValue = async (row, key, value) => {
 
 async function removeOne(row) {
   const ok = await ui.confirm({
-    title: `Delete this ${names.value.singular.toLowerCase()}?`,
+    title: `Delete this ${inSentence(names.value.singular)}?`,
     message: 'This cannot be undone. Archive it instead if you may need it later.',
     confirmText: 'Delete',
     danger: true,
@@ -110,7 +111,7 @@ async function archive({ ids, all, clear }, restore = false) {
   const n = all ? list.count.value : ids.length
   const word = restore ? 'Restore' : 'Archive'
   const ok = await ui.confirm({
-    title: `${word} ${n} ${(n === 1 ? names.value.singular : names.value.plural).toLowerCase()}?`,
+    title: `${word} ${n} ${inSentence(n === 1 ? names.value.singular : names.value.plural)}?`,
     message: restore ? 'They will show up in the table again.' : 'Archived rows are hidden from the table and exports, but kept.',
     confirmText: word,
     action: () => recordsApi.archive(itemId.value, all && !restore ? { all: true } : { ids, restore }),
@@ -161,7 +162,7 @@ const bulkConfig = computed(() => ({
       <EmptyState :icon="Table2" title="Table not found" message="It may have been deleted, or it isn't shared with your role." />
     </div>
     <template v-else>
-      <PageHeader :title="names.plural" :subtitle="names.description || `${list.count.value} ${(list.count.value === 1 ? names.singular : names.plural).toLowerCase()}`">
+      <PageHeader :title="names.plural" :subtitle="names.description || `${list.count.value} ${inSentence(list.count.value === 1 ? names.singular : names.plural)}`">
         <template #actions>
           <ReminderButton :section="cfg.pageItemId.value" />
           <AppButton variant="secondary" :icon="Columns3" @click="columnsOpen = true">Columns</AppButton>
@@ -171,7 +172,7 @@ const bulkConfig = computed(() => ({
 
       <div class="card p-3 sm:p-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <SearchInput v-model="list.filters.search" class="flex-1" :placeholder="`Search ${names.plural.toLowerCase()}…`" />
+          <SearchInput v-model="list.filters.search" class="flex-1" :placeholder="`Search ${inSentence(names.plural)}…`" />
           <AppTabs v-if="auth.isManager" v-model="view" :tabs="[{ value: 'active', label: 'Active' }, { value: 'archived', label: 'Archived' }]" />
         </div>
         <div class="mt-3">
@@ -205,7 +206,7 @@ const bulkConfig = computed(() => ({
               </div>
             </template>
             <template #empty>
-              <EmptyState :icon="Table2" :title="view === 'archived' ? 'Nothing archived' : `No ${names.plural.toLowerCase()} yet`">
+              <EmptyState :icon="Table2" :title="view === 'archived' ? 'Nothing archived' : `No ${inSentence(names.plural)} yet`">
                 <AppButton v-if="auth.isManager && view === 'active'" :icon="Plus" @click="openForm()">Add {{ names.singular }}</AppButton>
               </EmptyState>
             </template>
@@ -214,7 +215,7 @@ const bulkConfig = computed(() => ({
         </div>
       </div>
 
-      <RecordForm v-model:open="formOpen" :columns="dataColumns" :record="editing" :title="`${editing ? 'Edit' : 'Add'} ${names.singular.toLowerCase()}`" :saving="saving" :errors="errors" @save="save" />
+      <RecordForm v-model:open="formOpen" :columns="dataColumns" :record="editing" :title="`${editing ? 'Edit' : 'Add'} ${inSentence(names.singular)}`" :saving="saving" :errors="errors" @save="save" />
       <ColumnsPanel v-model:open="columnsOpen" :cfg="cfg" :title="`${names.plural} columns`" />
       <AppModal v-model:open="moveOpen" title="Move to another table" size="sm">
         <AppSelect v-model="moveTarget" label="Target table" placeholder="Choose a table" :options="targets.map((t) => ({ value: t.id, label: t.name }))" />
