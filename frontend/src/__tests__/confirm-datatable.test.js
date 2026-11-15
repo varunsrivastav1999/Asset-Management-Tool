@@ -236,3 +236,16 @@ describe('ConfigurableTable bulk actions', () => {
     expect(w.text()).not.toContain('Export')
   })
 })
+
+describe('DataTable row actions', () => {
+  it('pins the actions column to the right edge so Edit/Delete never scroll away', async () => {
+    const DataTable = (await import('@/components/ui/DataTable.vue')).default
+    const w = mount(DataTable, {
+      props: { columns: [{ key: 'name', label: 'Name' }, { key: 'code', label: 'Code' }, { key: 'actions', label: '' }], rows: [{ id: 1, name: 'Finance', code: 'FIN' }] },
+    })
+    const cells = w.findAll('tbody tr:first-child td')
+    expect(cells.at(-1).classes()).toContain('sticky')
+    expect(cells.at(0).classes()).not.toContain('sticky')
+    expect(w.findAll('thead th').at(-1).classes()).toContain('right-0')
+  })
+})

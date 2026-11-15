@@ -27,6 +27,11 @@ function toggle(id) {
 }
 const value = (row, key) => key.split('.').reduce((o, k) => o?.[k], row)
 const mobileCols = computed(() => props.columns.filter((c) => c.mobile !== false))
+
+// Row actions stay pinned to the right edge, so Edit/Delete never scroll out of reach on narrow screens
+// or wide (admin-configured) tables. A column can opt in/out with `sticky: true|false`.
+const isPinned = (c) => c.sticky ?? (c.key === 'actions' || c.key === '_actions')
+const PINNED = 'sticky right-0 z-[1] bg-surface-strong shadow-[-10px_0_12px_-12px_rgb(0_0_0/0.35)]'
 </script>
 
 <template>
@@ -43,7 +48,7 @@ const mobileCols = computed(() => props.columns.filter((c) => c.mobile !== false
               v-for="c in columns"
               :key="c.key"
               class="px-4 py-3 font-medium whitespace-nowrap"
-              :class="[c.class, c.align === 'right' && 'text-right']"
+              :class="[c.class, c.align === 'right' && 'text-right', isPinned(c) && PINNED]"
               :style="c.width ? { width: `${c.width}px`, minWidth: `${c.width}px` } : undefined"
               :aria-sort="sortState(c.key) === 'asc' ? 'ascending' : sortState(c.key) === 'desc' ? 'descending' : undefined"
             >
@@ -75,7 +80,7 @@ const mobileCols = computed(() => props.columns.filter((c) => c.mobile !== false
             <td v-if="selectable" class="px-4 py-3" @click.stop>
               <input type="checkbox" class="h-4 w-4 accent-[var(--accent)]" :checked="selected.includes(row[rowKey])" :aria-label="`Select ${row[rowKey]}`" @change="toggle(row[rowKey])" />
             </td>
-            <td v-for="c in columns" :key="c.key" class="px-4 py-3" :class="[c.class, c.align === 'right' && 'text-right']">
+            <td v-for="c in columns" :key="c.key" class="px-4 py-3" :class="[c.class, c.align === 'right' && 'text-right', isPinned(c) && PINNED]">
               <slot :name="`cell-${c.key}`" :row="row" :value="value(row, c.key)" :index="ri">{{ value(row, c.key) ?? '—' }}</slot>
             </td>
           </tr>
