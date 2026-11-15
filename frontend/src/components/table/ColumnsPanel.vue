@@ -1,4 +1,5 @@
 <script setup>
+import { COLUMN_TYPES, COLUMN_TYPE_LABEL, hasOptions, optionsPlaceholder, parseOptions } from '@/utils/columnTypes'
 import { computed, reactive, ref, watch } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import { ChevronDown, GripVertical, Lock, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
@@ -20,16 +21,8 @@ const open = defineModel('open', { type: Boolean })
 const props = defineProps({ cfg: { type: Object, required: true }, title: { type: String, default: 'Customize columns' } })
 const ui = useUiStore()
 
-const TYPES = [
-  { value: 'text', label: 'Text' },
-  { value: 'number', label: 'Number' },
-  { value: 'date', label: 'Date' },
-  { value: 'boolean', label: 'Yes / No' },
-  { value: 'select', label: 'Select' },
-  { value: 'user', label: 'User' },
-  { value: 'file', label: 'File / link' },
-]
-const TYPE_LABEL = { ...Object.fromEntries(TYPES.map((t) => [t.value, t.label])), auto_number: 'Auto number', status: 'Status' }
+const TYPES = COLUMN_TYPES
+const TYPE_LABEL = COLUMN_TYPE_LABEL
 
 const list = ref([])
 watch(
@@ -77,7 +70,7 @@ const saveCol = (col) =>
         is_sortable: col.is_sortable,
         width: col.width ? Number(col.width) : null,
         visible_roles: col.visible_roles,
-        ...(!col.is_builtin ? { options: col.type === 'select' ? String(col.optionsText ?? (col.options || []).join(', ')).split(',').map((o) => o.trim()).filter(Boolean) : [] } : {}),
+        ...(!col.is_builtin ? { options: parseOptions(col.type, col.optionsText ?? (Array.isArray(col.options) ? col.options : []).join(', ')) } : {}),
       }),
     'Column saved',
   )
@@ -96,8 +89,8 @@ async function add() {
       sidebar_item: props.cfg.item.value,
       name: newCol.name,
       type: newCol.type,
-      options: newCol.type === 'select' ? newCol.options.split(',').map((o) => o.trim()).filter(Boolean) : [],
-      is_searchable: ['text', 'select', 'user'].includes(newCol.type),
+      options: parseOptions(newCol.type, newCol.options),
+      is_searchable: ['text', 'select', 'status', 'user'].includes(newCol.type),
       is_sortable: newCol.type !== 'file',
     })
     ui.success('Column added')
@@ -151,7 +144,7 @@ async function resetAll() {
             <label class="flex items-center gap-2 text-sm"><input v-model="col.is_searchable" type="checkbox" class="h-4 w-4 accent-[var(--accent)]" /> Searchable</label>
             <label class="flex items-center gap-2 text-sm"><input v-model="col.is_sortable" type="checkbox" class="h-4 w-4 accent-[var(--accent)]" /> Sortable</label>
             <AppInput v-model="col.width" label="Width (px)" type="number" min="40" max="800" placeholder="auto" />
-            <AppInput v-if="!col.is_builtin && col.type === 'select'" :model-value="col.optionsText ?? (col.options || []).join(', ')" label="Options (comma separated)" @update:model-value="col.optionsText = $event" />
+            <AppInput v-if="!col.is_builtin && hasOptions(col.type)" :model-value="col.optionsText ?? (col.options || []).join(', ')" label="Options (comma separated)" @update:model-value="col.optionsText = $event" />
             <RoleChecklist v-model="col.visible_roles" class="sm:col-span-2" label="Visible to roles" />
             <div class="flex justify-end sm:col-span-2"><AppButton size="sm" :loading="busy" @click="saveCol(col)">Save column</AppButton></div>
           </div>
@@ -165,7 +158,7 @@ async function resetAll() {
         <AppInput v-model="newCol.name" label="Name" placeholder="e.g. Cost centre" required :error="addErrors.name || addErrors.key" />
         <AppSelect v-model="newCol.type" label="Type" :options="TYPES" :error="addErrors.type" />
         <AppButton type="submit" :icon="Plus" :loading="busy" :disabled="!newCol.name.trim()">Add</AppButton>
-        <AppInput v-if="newCol.type === 'select'" v-model="newCol.options" class="sm:col-span-3" label="Options (comma separated)" placeholder="Option A, Option B" :error="addErrors.options" />
+        <AppInput v-if="hasOptions(newCol.type)" v-model="newCol.options" class="sm:col-span-3" :label="newCol.type === 'status' ? 'Statuses (comma separated, leave empty for the defaults)' : 'Options (comma separated)'" :placeholder="optionsPlaceholder(newCol.type)" :error="addErrors.options" />
       </div>
       <p class="mt-2 text-xs text-muted">Values are edited inline in the table and stored on each record — no database change needed.</p>
     </form>

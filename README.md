@@ -96,7 +96,7 @@ Without `ADMIN_PASSWORD`, the admin is `admin@example.com` and a random password
 docker compose logs api | grep "Generated admin password"
 ```
 
-Open **http://localhost:2025** and sign in. Every step can run again safely and never changes existing data or passwords. To customise anything, copy `.env.example` to `.env` (every setting is documented there).
+Open **https://localhost:2025**, or **https://<this machine's LAN IP>:2025** from a phone or another computer, and sign in. Every step can run again safely and never changes existing data or passwords. To customise anything, copy `.env.example` to `.env` (every setting is documented there).
 
 To load demo data (departments, categories with custom fields, ~60 assets, and accounts `admin@`, `manager@`, `employee@example.com` with password `Demo@12345`):
 
@@ -110,16 +110,23 @@ The stack is tuned for a small server: memory limits (Postgres 320 MB, Redis 96 
 
 | URL | |
 |---|---|
-| `http://localhost:2025/` | the app |
+| `https://localhost:2025/` | the app (plain `http://` on the same port redirects to HTTPS) |
 | `/api/docs/` | Swagger UI (OpenAPI schema at `/api/schema/`) |
 | `/api/health/`, `/api/health/ready/` | liveness, readiness (DB + cache) |
 | `/admin/` | Django admin — superusers only, private networks only (see below) |
 
 Default sidebar items, dashboard widgets and table columns are created by migrations (columns are also created on demand for new table pages); admins can restore them any time with **Reset** in the settings screens or the Columns panel.
 
+### Using it from phones and other devices
+
+- Every device on the same network can open **https://<this machine's IP>:2025**. No IP needs configuring: any private-network address (192.168.x.x, 10.x.x.x, `*.local` …) is accepted automatically, so it keeps working when the IP changes. QR codes, PDFs and email links use the address the app was opened on (set `FRONTEND_URL` to pin one).
+- **Camera / QR scanner:** browsers only allow the camera on HTTPS pages (or `localhost`), which is why nginx serves HTTPS by default. On first visit each device shows a certificate warning for the self-signed certificate: tap **Advanced → Proceed** (Chrome) or **Show Details → visit this website** (Safari) once, then allow the camera.
+- **No warning at all:** create a locally trusted certificate with [mkcert](https://github.com/FiloSottile/mkcert) (`mkcert -install`, then `mkcert -cert-file nginx/certs/fullchain.pem -key-file nginx/certs/privkey.pem localhost 127.0.0.1 <your LAN IP>`), restart nginx, and install mkcert's root CA on each phone (`mkcert -CAROOT` shows where it is). Offline-install (PWA) also needs a trusted certificate.
+- If other devices can't connect, allow incoming connections for Docker in the computer's firewall, and make sure they're on the same Wi-Fi/LAN.
+
 ## Production checklist
 
-1. **HTTPS:** put `fullchain.pem` and `privkey.pem` in `nginx/certs/`, replace `nginx/conf.d/default.conf` with `nginx/https.conf.example`, rebuild `nginx`. The app is then served over TLS on 2025; front it with a 443 load balancer or port mapping for a bare domain. Set `DJANGO_SECURE_SSL_REDIRECT`, `DJANGO_SECURE_COOKIES` and `JWT_COOKIE_SECURE` to `true`.
+1. **HTTPS:** put a real `fullchain.pem` and `privkey.pem` in `nginx/certs/` and restart `nginx`; it picks them up automatically (with HSTS) instead of the self-signed certificate. Front port 2025 with a 443 load balancer or port mapping for a bare domain. Set `DJANGO_SECURE_SSL_REDIRECT`, `DJANGO_SECURE_COOKIES` and `JWT_COOKIE_SECURE` to `true`, and `ALLOW_PRIVATE_NETWORK_HOSTS=false` if the server must only answer its domain.
 2. Set `DJANGO_ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` and `FRONTEND_URL` to your real origin (QR codes encode `FRONTEND_URL/a/<tag>`).
 3. Set a strong `POSTGRES_PASSWORD` and `ADMIN_PASSWORD`. `DJANGO_SECRET_KEY` is generated automatically if unset; if you set it yourself it must be long and random (the app refuses to start with a weak one).
 4. **Email/SMS:** set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `DEFAULT_FROM_EMAIL` and, for SMS, `SMS_PROVIDER`, `SMS_API_KEY`, `SMS_SENDER_ID`. Without `SMTP_HOST`, emails are written to the logs.

@@ -10,6 +10,7 @@ import { pick, userLabel, userSub } from '@/api/pickers'
 import { parseError } from '@/api/http'
 import { useUiStore } from '@/stores/ui'
 import { formatDate, formatMoney, formatNumber } from '@/utils/format'
+import { hasOptions, isCustomStatus, statusTone } from '@/utils/columnTypes'
 
 const props = defineProps({
   col: { type: Object, required: true },
@@ -82,7 +83,7 @@ async function commit() {
 
 <template>
   <div v-if="editing" ref="box" class="flex min-w-[10rem] items-center gap-1" @click.stop>
-    <select v-if="col.type === 'select'" v-model="draft" class="field !py-1 text-xs" @keydown.enter="commit" @keydown.esc="editing = false">
+    <select v-if="hasOptions(col.type)" v-model="draft" class="field !py-1 text-xs" @keydown.enter="commit" @keydown.esc="editing = false">
       <option value="">—</option>
       <option v-for="o in options" :key="o" :value="o">{{ o }}</option>
     </select>
@@ -108,6 +109,7 @@ async function commit() {
 
   <div v-else class="group/cell inline-flex max-w-full min-w-0 items-center gap-1.5" :class="editable && isCustom && 'cursor-text'" @click="editable && isCustom && ($event.stopPropagation(), start())">
     <span v-if="col.type === 'auto_number'" class="font-mono text-xs text-muted">{{ offset + index + 1 }}</span>
+    <AppBadge v-else-if="isCustomStatus(col)" :tone="statusTone(raw, options)" :dot="!!raw">{{ raw || '—' }}</AppBadge>
     <StatusBadge v-else-if="col.type === 'status'" :status="raw" :kind="col.options?.kind || 'asset'" />
     <AppBadge v-else-if="col.type === 'boolean'" :tone="raw === true ? 'emerald' : 'slate'">{{ raw === true ? 'Yes' : raw === false ? 'No' : '—' }}</AppBadge>
     <AppBadge v-else-if="col.type === 'select' && raw">{{ raw }}</AppBadge>

@@ -1,4 +1,5 @@
 <script setup>
+import { hasOptions } from '@/utils/columnTypes'
 import { reactive, ref, watch } from 'vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -41,7 +42,7 @@ function submit() {
   <AppModal v-model:open="open" :title="title" size="lg">
     <form id="record-form" class="grid gap-4 sm:grid-cols-2" novalidate @submit.prevent="submit">
       <template v-for="c in columns" :key="c.key">
-        <AppSelect v-if="c.type === 'select'" v-model="form[c.key]" :label="c.name" :required="c.is_required" placeholder="—" :options="c.options.map((o) => ({ value: o, label: o }))" :error="errors[c.key]" />
+        <AppSelect v-if="hasOptions(c.type)" v-model="form[c.key]" :label="c.name" :required="c.is_required" placeholder="—" :options="c.options.map((o) => ({ value: o, label: o }))" :error="errors[c.key]" />
         <AppSelect v-else-if="c.type === 'boolean'" v-model="form[c.key]" :label="c.name" :required="c.is_required" placeholder="—" :options="[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]" :error="errors[c.key]" />
         <EntityPicker v-else-if="c.type === 'user'" v-model="form[c.key]" :label="c.name" :required="c.is_required" :fetcher="pick.users" :label-of="userLabel" :sublabel-of="userSub" :initial="users[c.key] ? [users[c.key]] : []" :error="errors[c.key]" @select="(u) => (users[c.key] = u)" />
         <AppInput

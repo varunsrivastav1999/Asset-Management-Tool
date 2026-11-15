@@ -13,11 +13,11 @@ from apps.core.permissions import IsAdmin, is_admin
 from apps.core.roles import validate_roles
 
 from .models import SidebarItem, TableColumn, TablePreference
-from .table_api import effective_columns, resolve_item
+from .table_api import clean_options, effective_columns, resolve_item
 from .tables import TABLES, ensure_columns
 
 KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
-CUSTOM_TYPES = [t for t in TableColumn.Type.values if t not in ("auto_number", "status")]
+CUSTOM_TYPES = [t for t in TableColumn.Type.values if t != "auto_number"]
 
 
 class TableColumnSerializer(serializers.ModelSerializer):
@@ -99,12 +99,7 @@ class TableColumnSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"key": "A column with this key already exists on this page."})
         attrs["key"] = key
         options = attrs.get("options", getattr(inst, "options", []))
-        if kind == TableColumn.Type.SELECT:
-            if not isinstance(options, list) or not options or not all(isinstance(o, str) and o.strip() for o in options):
-                raise serializers.ValidationError({"options": "Select columns need at least one text option."})
-            attrs["options"] = [o.strip() for o in options]
-        else:
-            attrs["options"] = []
+        attrs["options"] = clean_options(kind, options)
         return attrs
 
 

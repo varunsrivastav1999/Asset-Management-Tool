@@ -20,7 +20,7 @@ from .definitions import unique_slug
 from .models import SidebarItem, TableColumn, TableDefinition, TableRecord
 from .serializers import ICON_RE
 from .signals import broadcast_sidebar_change
-from .table_api import ConfigurableTableMixin, coerce_value
+from .table_api import ConfigurableTableMixin, clean_options, coerce_value
 from .tables import TABLES, ensure_columns, model_for
 
 CUSTOM = TableDefinition.CUSTOM
@@ -62,9 +62,7 @@ def delete_blocker(defn: TableDefinition, deleting=()) -> str | None:
 
 class ColumnSeedSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=60)
-    type = serializers.ChoiceField(
-        choices=[t for t in TableColumn.Type.values if t not in ("auto_number", "status")], default="text"
-    )
+    type = serializers.ChoiceField(choices=[t for t in TableColumn.Type.values if t != "auto_number"], default="text")
     options = serializers.ListField(child=serializers.CharField(max_length=80), required=False, default=list)
 
 
@@ -137,8 +135,10 @@ class TableDefinitionSerializer(serializers.ModelSerializer):
         if len(names) != len(set(names)):
             raise serializers.ValidationError("Column names must be unique.")
         for c in cols:
-            if c["type"] == "select" and not [o for o in c.get("options", []) if o.strip()]:
-                raise serializers.ValidationError(f"“{c['name']}” needs at least one option.")
+            try:
+                c["options"] = clean_options(c["type"], c.get("options", []))
+            except serializers.ValidationError as exc:
+                raise serializers.ValidationError(f"“{c['name']}”: {exc.detail['options']}")
         return cols
 
 
@@ -198,10 +198,10 @@ class TableDefinitionViewSet(AuditedViewSetMixin, viewsets.ModelViewSet):
                 name=c["name"].strip(),
                 key=key,
                 column_type=c["type"],
-                options=[o.strip() for o in c.get("options", []) if o.strip()] if c["type"] == "select" else [],
+                options=c["options"],
                 order=i,
                 is_required=i == 1,
-                is_searchable=c["type"] in ("text", "select", "user"),
+                is_searchable=c["type"] in ("text", "select", "status", "user"),
                 is_sortable=c["type"] != "file",
             )
         for j, key in enumerate(("created_at", "updated_at")):

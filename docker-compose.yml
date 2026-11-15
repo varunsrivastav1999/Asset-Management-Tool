@@ -1,5 +1,5 @@
 # One command, no manual steps:   docker compose up --build
-#   App (nginx: SPA + reverse proxy)          -> http://localhost:2025
+#   App (nginx: SPA + reverse proxy)          -> https://localhost:2025 (or https://<this machine's LAN IP>:2025)
 #   Backend (Django API + Channels, ASGI)    -> http://127.0.0.1:2000 (localhost only; use nginx publicly)
 # The api container migrates, seeds defaults (menu, tables, columns, widgets, reminder rules) and creates the
 # first admin from ADMIN_EMAIL / ADMIN_PASSWORD (a random password is generated and printed once if unset).
@@ -126,12 +126,17 @@ services:
       args:
         VITE_APP_NAME: ${VITE_APP_NAME:-Asset Management Tools}
     image: asset-mgmt/web:${APP_VERSION:-latest}
+    environment:
+      # auto: HTTPS with nginx/certs/*.pem if present, else a self-signed certificate (needed for phone cameras).
+      HTTPS: ${HTTPS:-auto}
+      TLS_HOSTS: ${TLS_HOSTS:-}
     ports:
       - "${FRONTEND_PORT:-2025}:2025"
     volumes:
       - media:/data/media:ro
       - ./nginx/certs:/etc/nginx/certs:ro
       - ./nginx/admin-auth:/etc/nginx/admin-auth:ro
+      - nginx_tls:/var/lib/nginx/tls
     mem_limit: 64m
     depends_on:
       api: { condition: service_healthy }
@@ -140,6 +145,7 @@ services:
 
 volumes:
   pgdata:
+  nginx_tls:
   redisdata:
   media:
   private_media:

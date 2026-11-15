@@ -106,6 +106,27 @@ class ColumnSerializer(serializers.ModelSerializer):
         ]
 
 
+# Columns whose values are picked from a fixed list of options.
+CHOICE_TYPES = (TableColumn.Type.SELECT, TableColumn.Type.STATUS)
+DEFAULT_STATUS_OPTIONS = ["Open", "In progress", "Done"]
+
+
+def clean_options(kind: str, options) -> list[str]:
+    """Normalised option list for a custom column (empty for types without options)."""
+    from rest_framework import serializers
+
+    if kind not in CHOICE_TYPES:
+        return []
+    if kind == TableColumn.Type.STATUS and not options:
+        return list(DEFAULT_STATUS_OPTIONS)
+    if not isinstance(options, list) or not all(isinstance(o, str) for o in options):
+        raise serializers.ValidationError({"options": "Options must be a list of text values."})
+    cleaned = list(dict.fromkeys(o.strip() for o in options if o.strip()))
+    if not cleaned:
+        raise serializers.ValidationError({"options": f"{TableColumn.Type(kind).label} columns need at least one option."})
+    return cleaned
+
+
 def coerce_value(col: TableColumn, value):
     """Validate a custom column value for storage in custom_data."""
     if value in (None, ""):
@@ -128,8 +149,8 @@ def coerce_value(col: TableColumn, value):
             if s in {"false", "0", "no"}:
                 return False
             raise ValueError
-        if col.column_type == t.SELECT:
-            if col.options and str(value) not in [str(o) for o in col.options]:
+        if col.column_type in CHOICE_TYPES:
+            if isinstance(col.options, list) and col.options and str(value) not in [str(o) for o in col.options]:
                 raise ValueError
             return str(value)
         if col.column_type == t.USER:

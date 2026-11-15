@@ -17,6 +17,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import IconPicker from '@/components/settings/IconPicker.vue'
 import RoleChecklist from '@/components/settings/RoleChecklist.vue'
 import { iconFor } from '@/utils/icons'
+import { COLUMN_TYPES, hasOptions, optionsPlaceholder, parseOptions } from '@/utils/columnTypes'
 
 const ui = useUiStore()
 const sidebar = useSidebarStore()
@@ -44,15 +45,7 @@ onMounted(async () => {
   groups.value = out
 })
 
-const TYPES = [
-  { value: 'text', label: 'Text' },
-  { value: 'number', label: 'Number' },
-  { value: 'date', label: 'Date' },
-  { value: 'boolean', label: 'Yes / No' },
-  { value: 'select', label: 'Select' },
-  { value: 'user', label: 'User' },
-  { value: 'file', label: 'File / link' },
-]
+const TYPES = COLUMN_TYPES
 
 const open = ref(false)
 const editing = ref(null)
@@ -86,7 +79,7 @@ async function save() {
     ...(form.parent !== '' ? { parent: form.parent } : editing.value ? {} : { parent: null }),
     ...(editing.value
       ? {}
-      : { columns: form.columns.filter((c) => c.name.trim()).map((c) => ({ name: c.name.trim(), type: c.type, options: c.type === 'select' ? c.options.split(',').map((o) => o.trim()).filter(Boolean) : [] })) }),
+      : { columns: form.columns.filter((c) => c.name.trim()).map((c) => ({ name: c.name.trim(), type: c.type, options: parseOptions(c.type, c.options) })) }),
   }
   try {
     const t = editing.value ? await definitionsApi.update(editing.value.id, payload) : await definitionsApi.create(payload)
@@ -185,7 +178,7 @@ const singularHint = computed(() => (form.name ? `Used in buttons: “Add ${form
               <AppInput v-model="c.name" :aria-label="`Column ${i + 1} name`" :placeholder="i === 0 ? 'Name (required column)' : 'Column name'" />
               <AppSelect v-model="c.type" :aria-label="`Column ${i + 1} type`" :options="TYPES" />
               <button v-if="form.columns.length > 1" type="button" class="self-center rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger" :aria-label="`Remove column ${i + 1}`" @click="form.columns.splice(i, 1)"><X class="h-4 w-4" /></button>
-              <AppInput v-if="c.type === 'select'" v-model="c.options" class="sm:col-span-3" placeholder="Options, comma separated" />
+              <AppInput v-if="hasOptions(c.type)" v-model="c.options" class="sm:col-span-3" :aria-label="`Column ${i + 1} options`" :placeholder="c.type === 'status' ? `Statuses, comma separated (default: ${optionsPlaceholder('status')})` : 'Options, comma separated'" />
             </div>
           </div>
           <p v-if="errors.columns" class="mt-1 text-xs text-danger">{{ errors.columns }}</p>

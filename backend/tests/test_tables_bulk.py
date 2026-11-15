@@ -330,3 +330,35 @@ def test_custom_table_rename_and_delete_round_trip(admin_client):
     assert admin_client.delete(f"/api/table-definitions/{d['id']}/").status_code == 204
     ids = [t["id"] for t in admin_client.get("/api/table-definitions/").data]
     assert d["id"] not in ids  # the list the UI reloads no longer contains it
+
+
+# --- Status columns -------------------------------------------------------------------------
+def test_status_column_on_custom_table_and_builtin_page(admin_client, manager_client, asset):
+    d = admin_client.post(
+        "/api/table-definitions/",
+        {"name": "Tickets", "singular": "Ticket", "columns": [{"name": "Title"}, {"name": "State", "type": "status"}]},
+        format="json",
+    )
+    assert d.status_code == 201, d.data
+    item = d.data["sidebar_item"]
+    state = TableColumn.objects.get(sidebar_item_id=item, name="State")
+    assert state.column_type == "status" and state.options == ["Open", "In progress", "Done"]  # defaults
+    url = f"/api/records/?table_item={item}"
+    ok = manager_client.post(url, {"custom_data": {"title": "Printer", "state": "In progress"}}, format="json")
+    assert ok.status_code == 201, ok.data
+    bad = manager_client.post(url, {"custom_data": {"title": "Fax", "state": "Exploded"}}, format="json")
+    assert bad.status_code == 400
+    assert manager_client.get(f"{url}&cf.state=In progress").data["count"] == 1
+
+    # Admins can also add a status column with their own states to a built-in page.
+    assets_item = TableDefinition.objects.get(source="assets").sidebar_item_id
+    col = admin_client.post(
+        "/api/table-columns/",
+        {"sidebar_item": assets_item, "name": "Audit", "type": "status", "options": ["Pending", "Checked", " Checked "]},
+        format="json",
+    )
+    assert col.status_code == 201, col.data
+    assert col.data["options"] == ["Pending", "Checked"]  # trimmed and de-duplicated
+    patch = manager_client.patch(f"/api/assets/{asset.pk}/custom-data/", {"audit": "Checked"}, format="json")
+    assert patch.status_code == 200, patch.data
+    assert manager_client.patch(f"/api/assets/{asset.pk}/custom-data/", {"audit": "Lost"}, format="json").status_code == 400
