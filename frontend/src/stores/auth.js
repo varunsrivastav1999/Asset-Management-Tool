@@ -3,6 +3,26 @@ import { computed, ref } from 'vue'
 import { authApi } from '@/api'
 import { refreshAccess, tokenStore } from '@/api/http'
 
+// Non-secret hint that a refresh cookie may exist, so first-time visitors don't trigger a guaranteed-401
+// refresh call. The cookie itself stays HttpOnly; the server remains the only authority.
+const HINT = 'amt.session'
+const hint = {
+  get: () => {
+    try {
+      return localStorage.getItem(HINT) === '1'
+    } catch {
+      return true // storage blocked: fall back to always trying
+    }
+  },
+  set: (on) => {
+    try {
+      on ? localStorage.setItem(HINT, '1') : localStorage.removeItem(HINT)
+    } catch {
+      /* storage unavailable */
+    }
+  },
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const user = ref(null)
   const ready = ref(false)
@@ -16,12 +36,14 @@ export const useAuthStore = defineStore('auth', () => {
   /** Restore a session from the refresh cookie (once per page load). */
   function bootstrap() {
     if (!bootPromise) {
-      bootPromise = refreshAccess()
+      bootPromise = (hint.get() ? refreshAccess() : Promise.reject(new Error('no session')))
         .then((data) => {
           user.value = data.user
+          hint.set(true)
         })
         .catch(() => {
           user.value = null
+          hint.set(false)
         })
         .finally(() => {
           ready.value = true
@@ -35,6 +57,7 @@ export const useAuthStore = defineStore('auth', () => {
     tokenStore.set(data.access)
     user.value = data.user
     ready.value = true
+    hint.set(true)
     return data.user
   }
 
@@ -50,6 +73,7 @@ export const useAuthStore = defineStore('auth', () => {
   function clearSession() {
     tokenStore.clear()
     user.value = null
+    hint.set(false)
   }
 
   async function refreshProfile() {

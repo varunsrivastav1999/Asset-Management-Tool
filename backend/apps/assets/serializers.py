@@ -1,5 +1,6 @@
 import datetime
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
@@ -309,7 +310,7 @@ class AssetWriteSerializer(serializers.ModelSerializer):
         return value or None
 
     def validate_currency(self, value):
-        value = (value or "USD").strip().upper()
+        value = (value or settings.DEFAULT_CURRENCY).strip().upper()
         if len(value) != 3 or not value.isalpha():
             raise serializers.ValidationError("Use a 3-letter ISO currency code.")
         return value

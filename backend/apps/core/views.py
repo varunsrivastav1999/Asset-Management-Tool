@@ -42,3 +42,16 @@ def readiness(request):
         checks["cache"] = "error"
     healthy = checks["database"] == "ok"
     return Response({"status": "ok" if healthy else "error", "checks": checks}, status=200 if healthy else 503)
+
+
+@extend_schema(responses={200: dict})
+@api_view(["GET"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def app_config(request):
+    """Public, non-secret display settings the SPA needs before sign-in (currency and number formatting)."""
+    from django.conf import settings
+
+    return Response(
+        {"org_name": settings.ORG_NAME, "currency": settings.DEFAULT_CURRENCY, "currency_locale": settings.CURRENCY_LOCALE}
+    )

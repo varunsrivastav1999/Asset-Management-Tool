@@ -41,7 +41,7 @@ const display = computed(() => {
   if (v === null || v === undefined || v === '') return '—'
   switch (props.col.type) {
     case 'number':
-      return fmt.value === 'currency' ? formatMoney(v, props.row.currency || 'USD') : formatNumber(v)
+      return fmt.value === 'currency' ? formatMoney(v, props.row.currency || undefined) : formatNumber(v)
     case 'date':
       return formatDate(v)
     default:

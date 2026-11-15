@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useUiStore } from '@/stores/ui'
+import { APP_NAME } from '@/brand'
 
 /**
  * Column configuration for a table page.
@@ -101,6 +102,15 @@ export function useTableConfig(table, { resource, names: defaults = {} } = {}) {
   watch(
     () => notes.columnsEvent.n,
     () => notes.columnsEvent.item && notes.columnsEvent.item === item.value && reload(),
+  )
+
+  // The browser tab follows the table's current name (custom tables, renamed built-ins), not the route's static title.
+  watch(
+    () => names.value.plural,
+    (plural) => {
+      if (plural) document.title = `${plural} · ${APP_NAME}`
+    },
+    { immediate: true },
   )
 
   return { columns, visibleColumns, item, meta, names, supportsCustom, params, pageItemId, canEdit, canEditValues, setFromList, reload, toggle, resetMine, setCustomValue }

@@ -4,7 +4,7 @@ from rest_framework import serializers
 
 from apps.accounts.models import Department
 from apps.accounts.serializers import UserBriefSerializer
-from apps.assets.models import Asset, Category, Location
+from apps.assets.models import Asset, Category, Location, default_currency
 from apps.core.files import decode_signature
 
 from .models import GoodsReceipt, Handover, HandoverItem
@@ -30,7 +30,7 @@ class ReceiptItemSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True, default="")
     condition = serializers.ChoiceField(choices=Asset.Condition.choices, default=Asset.Condition.NEW)
     unit_cost = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0, required=False, allow_null=True)
-    currency = serializers.CharField(max_length=3, default="USD")
+    currency = serializers.CharField(max_length=3, default=default_currency)
     warranty_expiry = serializers.DateField(required=False, allow_null=True)
     maintenance_interval_days = serializers.IntegerField(min_value=1, required=False, allow_null=True)
     custom_data = serializers.DictField(required=False, default=dict)

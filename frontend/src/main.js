@@ -6,7 +6,8 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
-import { tokenStore } from './api/http'
+import { http, tokenStore } from './api/http'
+import { loadAppConfig } from './config'
 import { useAuthStore } from './stores/auth'
 import { useUiStore } from './stores/ui'
 
@@ -30,5 +31,6 @@ app.config.errorHandler = (err, _instance, info) => {
   useUiStore().error('An unexpected error occurred.')
 }
 
+loadAppConfig(http)
 router.isReady().then(() => sessionStorage.removeItem('chunk-reload'))
 app.mount('#app')

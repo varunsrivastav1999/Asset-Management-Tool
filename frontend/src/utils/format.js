@@ -1,3 +1,5 @@
+import { appConfig } from '@/config'
+
 const dateFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 const dateTimeFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
@@ -41,14 +43,15 @@ export function timeAgo(value, now = Date.now()) {
   return 'just now'
 }
 
-export function formatMoney(value, currency = 'USD', { compact = false } = {}) {
+/** Amount in `currency` (default: the app's DEFAULT_CURRENCY), grouped for the configured locale (en-IN: ₹1,00,000). */
+export function formatMoney(value, currency = appConfig.currency, { compact = false } = {}) {
   if (value === null || value === undefined || value === '') return '—'
   const n = Number(value)
   if (Number.isNaN(n)) return '—'
   try {
-    return new Intl.NumberFormat(undefined, {
+    return new Intl.NumberFormat(appConfig.currencyLocale || undefined, {
       style: 'currency',
-      currency: currency || 'USD',
+      currency: currency || appConfig.currency,
       notation: compact ? 'compact' : 'standard',
       maximumFractionDigits: compact ? 1 : 2,
     }).format(n)
@@ -58,7 +61,7 @@ export function formatMoney(value, currency = 'USD', { compact = false } = {}) {
 }
 
 export function formatNumber(value) {
-  return new Intl.NumberFormat().format(Number(value) || 0)
+  return new Intl.NumberFormat(appConfig.currencyLocale || undefined).format(Number(value) || 0)
 }
 
 export function initials(name = '') {

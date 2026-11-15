@@ -19,7 +19,7 @@ const cfg = computed(() => props.widget.config || {})
 const statValue = computed(() => {
   const v = d.value?.value
   if (v === undefined || v === null) return '—'
-  if (d.value.format === 'currency') return formatMoney(v, 'USD', { compact: true })
+  if (d.value.format === 'currency') return formatMoney(v, undefined, { compact: true })
   if (d.value.format === 'percent') return `${v}%`
   return formatNumber(v)
 })

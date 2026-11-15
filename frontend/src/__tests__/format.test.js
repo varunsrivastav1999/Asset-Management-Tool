@@ -43,3 +43,13 @@ describe('format utils', () => {
     expect(cleanParams({ a: '', b: null, c: 0, d: [], e: ['x'], f: 'y' })).toEqual({ c: 0, e: ['x'], f: 'y' })
   })
 })
+
+describe('currency defaults', () => {
+  it('uses the configured currency and Indian digit grouping', async () => {
+    const { appConfig } = await import('@/config')
+    expect(appConfig.currency).toBe('INR')
+    expect(formatMoney(150000)).toBe('₹1,50,000.00')
+    expect(formatMoney(1250000, undefined, { compact: true })).toMatch(/^₹12\.5\s?L/)
+    expect(formatMoney(99.5, 'USD')).toContain('99.50') // per-asset currencies still work
+  })
+})

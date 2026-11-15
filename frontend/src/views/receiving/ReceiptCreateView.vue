@@ -1,4 +1,5 @@
 <script setup>
+import { appConfig } from '@/config'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Copy, PackageCheck, Plus, Trash2 } from 'lucide-vue-next'
@@ -26,7 +27,7 @@ const saving = ref(false)
 const errors = ref({})
 let uid = 0
 
-const newItem = () => ({ _id: ++uid, name: '', category: '', quantity: 1, serials: '', model: '', manufacturer: '', condition: 'new', unit_cost: '', currency: 'USD', warranty_expiry: '', maintenance_interval_days: '', custom_data: {} })
+const newItem = () => ({ _id: ++uid, name: '', category: '', quantity: 1, serials: '', model: '', manufacturer: '', condition: 'new', unit_cost: '', currency: appConfig.currency, warranty_expiry: '', maintenance_interval_days: '', custom_data: {} })
 const form = reactive({ vendor: null, received_date: todayISO(), invoice_number: '', po_number: '', location: null, notes: '', signed_name: auth.user?.full_name || '', signature: '' })
 const items = ref([newItem()])
 
@@ -62,7 +63,7 @@ async function save() {
       manufacturer: i.manufacturer,
       condition: i.condition,
       unit_cost: i.unit_cost === '' ? null : i.unit_cost,
-      currency: i.currency || 'USD',
+      currency: i.currency || appConfig.currency,
       warranty_expiry: i.warranty_expiry || null,
       maintenance_interval_days: i.maintenance_interval_days || null,
       custom_data: i.custom_data,

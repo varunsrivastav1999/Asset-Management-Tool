@@ -95,7 +95,7 @@ describe('DashboardWidget', () => {
   const mountW = (widget) => mount(DashboardWidget, { props: { widget }, global: { plugins: [r], stubs: { DoughnutChart: true, BarChart: true, LineChart: true } } })
 
   it('formats stat values by kind', () => {
-    expect(mountW({ type: 'stat', title: 'Value', data: { value: '1250000', format: 'currency' } }).text()).toMatch(/\$1\.3M/)
+    expect(mountW({ type: 'stat', title: 'Value', data: { value: '1250000', format: 'currency' } }).text()).toMatch(/₹12\.5\s?L/) // default currency INR, Indian grouping (lakh)
     expect(mountW({ type: 'stat', title: 'Util', data: { value: 42.5, format: 'percent' } }).text()).toContain('42.5%')
     expect(mountW({ type: 'stat', title: 'Count', data: { value: 1234, format: 'number' } }).text()).toContain('1,234')
   })

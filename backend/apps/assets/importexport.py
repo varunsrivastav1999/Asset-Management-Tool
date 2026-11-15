@@ -117,7 +117,7 @@ def template_xlsx() -> bytes:
             "HQ",
             "2026-01-15",
             "1499.00",
-            "USD",
+            settings.DEFAULT_CURRENCY,
             "INV-1001",
             "PO-77",
             "2029-01-15",
@@ -324,7 +324,7 @@ class _RowParser:
         return None
 
     def _currency(self):
-        currency = self.cell("currency").upper() or (self.asset.currency if self.asset else "USD")
+        currency = self.cell("currency").upper() or (self.asset.currency if self.asset else settings.DEFAULT_CURRENCY)
         if len(currency) != 3:
             self.errors["currency"] = "Use a 3-letter code."
         return currency

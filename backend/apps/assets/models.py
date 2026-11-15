@@ -8,6 +8,11 @@ from apps.core.hosts import frontend_url
 from apps.core.models import TimeStampedModel, next_reference
 
 
+def default_currency() -> str:
+    """Currency for new assets (settings.DEFAULT_CURRENCY); a callable so changing the setting needs no migration."""
+    return settings.DEFAULT_CURRENCY
+
+
 class Category(TimeStampedModel):
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=140, unique=True)
@@ -147,7 +152,7 @@ class Asset(TimeStampedModel):
     receipt = models.ForeignKey("workflows.GoodsReceipt", null=True, blank=True, on_delete=models.SET_NULL, related_name="assets")
     purchase_date = models.DateField(null=True, blank=True)
     purchase_cost = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)])
-    currency = models.CharField(max_length=3, default="USD")
+    currency = models.CharField(max_length=3, default=default_currency)
     invoice_number = models.CharField(max_length=64, blank=True)
     po_number = models.CharField(max_length=64, blank=True)
     warranty_expiry = models.DateField(null=True, blank=True, db_index=True)

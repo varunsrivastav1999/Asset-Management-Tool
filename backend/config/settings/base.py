@@ -36,6 +36,10 @@ ALLOW_PRIVATE_NETWORK_HOSTS = env.bool("ALLOW_PRIVATE_NETWORK_HOSTS", default=Tr
 ALLOWED_HOSTS = ["*"]
 
 ORG_NAME = env("ORG_NAME", default="Asset Management Tools")
+# Currency for new assets, totals and PDFs (ISO 4217), and the locale used to format amounts
+# (en-IN groups as ₹1,00,000 and abbreviates to lakh/crore).
+DEFAULT_CURRENCY = env("DEFAULT_CURRENCY", default="INR").strip().upper()[:3]
+CURRENCY_LOCALE = env("CURRENCY_LOCALE", default="en-IN")
 # Empty = use the address each request came in on (see apps.core.hosts.frontend_url).
 FRONTEND_URL = env("FRONTEND_URL", default="").rstrip("/")
 ADMIN_URL = env("DJANGO_ADMIN_URL", default="admin/")
@@ -157,7 +161,20 @@ DJANGO_REDIS_LOG_IGNORED_EXCEPTIONS = True
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {"hosts": [env("CHANNELS_REDIS_URL", default=f"{REDIS_URL}/2")], "capacity": 1500, "expiry": 30},
+        "CONFIG": {
+            # channels_redis blocks up to 5 s waiting for messages; redis-py 8 also defaults to a 5 s socket timeout,
+            # which races it and kills idle WebSockets. Read timeout must stay well above the blocking wait.
+            "hosts": [
+                {
+                    "address": env("CHANNELS_REDIS_URL", default=f"{REDIS_URL}/2"),
+                    "socket_timeout": 30,
+                    "socket_connect_timeout": 5,
+                    "health_check_interval": 30,
+                }
+            ],
+            "capacity": 1500,
+            "expiry": 30,
+        },
     }
 }
 
@@ -213,6 +230,7 @@ SPECTACULAR_SETTINGS = {
         "AssetStatusEnum": "apps.assets.models.Asset.Status",
         "HandoverStatusEnum": "apps.workflows.models.Handover.Status",
         "MaintenanceStatusEnum": "apps.maintenance.models.MaintenanceRecord.Status",
+        "HandoverTypeEnum": "apps.workflows.models.Handover.Type",
     },
 }
 

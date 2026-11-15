@@ -7,13 +7,13 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, IsAuthenticated
 from rest_framework.response import Response
 
 from apps.audit.models import AuditLog
 from apps.audit.services import AuditedViewSetMixin, record, snapshot
 from apps.core.exceptions import DomainError
-from apps.core.permissions import IsAdmin, ReadAnyWriteAdmin, is_admin, is_manager
+from apps.core.permissions import IsAdmin, IsManager, ReadAnyWriteAdmin, is_admin, is_manager
 from apps.core.roles import effective_role, validate_roles
 
 from .definitions import unique_slug
@@ -155,12 +155,15 @@ class TableDefinitionViewSet(AuditedViewSetMixin, viewsets.ModelViewSet):
     """Tables behind sidebar pages. Everyone may read the ones they can see; only admins change them."""
 
     serializer_class = TableDefinitionSerializer
+    queryset = TableDefinition.objects.none()  # lets the schema generator infer the model; real rows come from get_queryset
     permission_classes = [ReadAnyWriteAdmin]
     pagination_class = None
     filterset_fields = ["source", "slug"]
     search_fields = ["name", "singular", "description"]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return TableDefinition.objects.none()
         qs = TableDefinition.objects.select_related("sidebar_item").order_by("name")
         if is_admin(self.request.user):
             return qs
@@ -325,11 +328,10 @@ class TableRecordViewSet(ConfigurableTableMixin, viewsets.ModelViewSet):
         return self._table_item
 
     def get_permissions(self):
-        perms = super().get_permissions()
-        if self.request.method not in ("GET", "HEAD", "OPTIONS") and self.action not in ("export_table",):
-            if not is_manager(self.request.user):
-                self.permission_denied(self.request, message="Manager or administrator role required.")
-        return perms
+        # Reading (and exporting) follows the table's role visibility; writing needs a manager or admin.
+        if self.request is None or self.request.method in SAFE_METHODS or self.action == "export_table":
+            return super().get_permissions()
+        return [IsAuthenticated(), IsManager()]
 
     def get_queryset(self):
         item = self.table_item()

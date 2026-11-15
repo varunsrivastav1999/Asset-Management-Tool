@@ -1,4 +1,5 @@
 <script setup>
+import { appConfig } from '@/config'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Save } from 'lucide-vue-next'
@@ -34,7 +35,7 @@ const blank = () => ({
   location: null,
   purchase_date: '',
   purchase_cost: '',
-  currency: 'USD',
+  currency: appConfig.currency,
   invoice_number: '',
   po_number: '',
   warranty_expiry: '',
