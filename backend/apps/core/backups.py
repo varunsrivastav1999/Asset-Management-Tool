@@ -1,10 +1,12 @@
 """Database backups made by the `backup` service (backup/backup.sh) in a volume shared with the api.
 
-The api never runs pg_dump itself: it lists the dump files, serves them for download, deletes them, and asks
-for a new backup by dropping a request file the service picks up within seconds.
+The api never runs pg_dump/pg_restore itself: it lists the dump files, serves them for download, deletes them,
+and asks for a new backup (a file in `.requests/`) or a restore (`.restore-request`, holding the backup's name) by
+dropping a file the service picks up within seconds. The service reports restore progress in `.restore-state`.
 """
 
 import datetime
+import json
 import re
 import time
 import uuid
@@ -14,9 +16,11 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
-NAME_RE = re.compile(r"^(auto|manual|uploaded)-\d{8}-\d{6}\.dump$")
+NAME_RE = re.compile(r"^(auto|manual|uploaded|safety)-\d{8}-\d{6}\.dump$")
 PG_DUMP_MAGIC = b"PGDMP"  # first bytes of every pg_dump custom-format file
 HEARTBEAT_MAX_AGE = 60  # seconds without a heartbeat before the service counts as offline
+RESTORE_REQUEST = ".restore-request"
+RESTORE_STATE = ".restore-state"
 
 
 @dataclass(frozen=True)
@@ -118,10 +122,49 @@ def save_upload(upload) -> Backup:
     return Backup(target.name, "uploaded", stat.st_size, datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.UTC))
 
 
+class RestoreBusy(Exception):
+    """A restore is already queued or running."""
+
+
+def restore_state() -> dict | None:
+    """The current or last restore: {"state": queued|running|done|failed, "name", "message", "at", "id"}."""
+    folder = backup_dir()
+    try:
+        name = (folder / RESTORE_REQUEST).read_text().strip()
+    except OSError:
+        name = None
+    if name:
+        return {"state": "queued", "name": name, "message": "Waiting for the backup service", "at": None, "id": None}
+    try:
+        data = json.loads((folder / RESTORE_STATE).read_text())
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and data.get("state") in ("running", "done", "failed") else None
+
+
+def request_restore(name: str) -> dict:
+    """Ask the backup service to replace the database with backup `name` (it takes a safety backup first)."""
+    if resolve(name) is None:
+        raise FileNotFoundError(name)
+    current = restore_state()
+    if current and current["state"] in ("queued", "running"):
+        raise RestoreBusy(f"A restore of {current['name']} is already in progress.")
+    folder = backup_dir()
+    partial = folder / f"{RESTORE_REQUEST}.part"
+    try:
+        partial.write_text(name + "\n")
+        partial.replace(folder / RESTORE_REQUEST)
+    except OSError as exc:
+        partial.unlink(missing_ok=True)
+        raise BackupStorageError(f"Can't write to the backup folder ({folder}). Is the backup service running?") from exc
+    return restore_state()
+
+
 def status() -> dict:
     return {
         "service_online": service_online(),
         "pending": pending_requests(),
+        "restore": restore_state(),
         "schedule": settings.BACKUP_TIME,
         "keep": settings.BACKUP_KEEP,
         "backups": [b.as_dict() for b in list_backups()],

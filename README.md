@@ -136,28 +136,26 @@ Default sidebar items, dashboard widgets and table columns are created by migrat
 - The `backup` service runs Postgres' own `pg_dump` (same version as the database). It backs up the database every day at `BACKUP_TIME` (default 02:00, in `TIME_ZONE`), keeps the newest `BACKUP_KEEP` daily backups (default 7), and takes one immediately on first start.
 - **Settings → Backups** (admins) shows the service status, schedule and every backup. You can **Back up now**, **download** a backup (keep copies off this machine) and delete old ones. Every action is recorded in the audit log.
 - **Upload backup** adds a `.dump` file, one you downloaded earlier or one from another installation, as `uploaded-YYYYMMDD-HHMMSS.dump`, up to `BACKUP_UPLOAD_MAX_MB` (1 GB). Only real `pg_dump` backups are accepted (checked by content), and uploads are kept until you delete them.
-- **Restore…** on any backup shows the three commands for that exact file, with copy buttons. Restoring is done on the server on purpose: the app must be stopped while the database is replaced.
-- Backups are stored in the `backups` Docker volume as `auto-YYYYMMDD-HHMMSS.dump` / `manual-….dump` (compressed `pg_dump` custom format). List them from the terminal:
+- **Restore** (the ↺ button on any backup) replaces all current data with that backup, from inside the app. Type the backup's name to confirm. Then:
+  1. The backup service first saves the current data as a **Before restore** backup (`safety-….dump`, the newest 3 are kept), so a restore can be undone by restoring that one.
+  2. It loads the backup into a separate scratch database while the app keeps running.
+  3. Only when that has fully succeeded does it swap the restored database in, which takes a moment.
+  4. The page shows progress and reloads when it's done. Older backups are migrated to the current version automatically.
+
+  If anything fails (a damaged file, for example), the current data is not touched and the page shows why.
+- Backups are stored in the `backups` Docker volume as `auto-…`, `manual-…`, `uploaded-…` and `safety-YYYYMMDD-HHMMSS.dump` (compressed `pg_dump` custom format). List them from the terminal:
 
 ```bash
 docker compose exec backup /scripts/backup.sh list
 ```
 
-- **Restore** replaces all current data with the backup. Stop the app first, restore, then start it again:
-
-```bash
-docker compose stop api worker beat
-```
+- You can also restore from the server's terminal (same safe swap, but without the "Before restore" backup; the app can stay running):
 
 ```bash
 docker compose run --rm backup restore manual-20261116-101500.dump
 ```
 
-```bash
-docker compose start api worker beat
-```
-
-- To restore a downloaded file, copy it into the volume first, then run the same `restore` command with its name:
+- To restore a file from the terminal that isn't in the volume yet, copy it in first (or use **Upload backup**):
 
 ```bash
 docker compose cp ./manual-20261116-101500.dump backup:/backups/

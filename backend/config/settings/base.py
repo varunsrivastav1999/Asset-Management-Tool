@@ -108,7 +108,7 @@ TEMPLATES = [
 DATABASES = {
     "default": env.db("DATABASE_URL", default="postgres://asset:asset@localhost:5432/asset"),
 }
-DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True  # with the pool: test connections on checkout (dead after a restore)
 # Connection pool (psycopg 3). Under ASGI every worker thread would otherwise keep its own persistent connection
 # and a burst of requests exhausts Postgres ("too many clients"); the pool bounds and shares connections per process.
 DB_POOL = env.bool("DB_POOL", default=True)

@@ -130,7 +130,7 @@ services:
       api: { condition: service_healthy }
 
   # Database backups: daily automatic (kept BACKUP_KEEP days) + on demand from Settings -> Backups.
-  # Restore: see README ("Backups"). Files live in the `backups` volume.
+  # Restore from Settings -> Backups (or see README "Backups"). Files live in the `backups` volume.
   backup:
     image: postgres:16-alpine
     entrypoint: ["/bin/sh", "/scripts/backup.sh"]

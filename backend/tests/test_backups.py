@@ -118,3 +118,77 @@ def test_upload_is_admin_only(manager_client, employee_client, anon_client, back
     for c in (manager_client, employee_client):
         assert c.post("/api/backups/upload/", {"file": dump_file()}).status_code == 403
     assert anon_client.post("/api/backups/upload/", {"file": dump_file()}).status_code == 401
+
+
+# --- restore ------------------------------------------------------------------------------------------------------
+
+RESTORE_URL = "/api/backups/manual-20261116-101500.dump/restore/"
+
+
+@pytest.fixture
+def online(backup_dir):
+    (backup_dir / ".heartbeat").write_text(str(int(time.time())))
+    return backup_dir
+
+
+def test_restore_queues_a_request_for_the_service(admin_client, online):
+    res = admin_client.post(RESTORE_URL, {"confirm": "manual-20261116-101500.dump"}, format="json")
+    assert res.status_code == 202
+    assert res.json()["restore"] == {
+        "state": "queued",
+        "name": "manual-20261116-101500.dump",
+        "message": "Waiting for the backup service",
+        "at": None,
+        "id": None,
+    }
+    assert (online / ".restore-request").read_text().strip() == "manual-20261116-101500.dump"
+    assert AuditLog.objects.filter(model="core.backup", object_repr__startswith="Restore of").exists()
+
+
+def test_restore_needs_the_name_typed_to_confirm(admin_client, online):
+    res = admin_client.post(RESTORE_URL, {"confirm": "yes"}, format="json")
+    assert res.status_code == 400 and res.json()["code"] == "confirm_required"
+    assert not (online / ".restore-request").exists()
+
+
+def test_only_one_restore_at_a_time(admin_client, online):
+    confirm = {"confirm": "manual-20261116-101500.dump"}
+    assert admin_client.post(RESTORE_URL, confirm, format="json").status_code == 202
+    assert admin_client.post(RESTORE_URL, confirm, format="json").status_code == 409
+    (online / ".restore-request").unlink()
+    (online / ".restore-state").write_text('{"state": "running", "name": "x", "message": "Loading", "at": 1, "id": "a"}')
+    assert admin_client.post(RESTORE_URL, confirm, format="json").status_code == 409
+
+
+def test_restore_refused_when_service_is_down_or_backup_missing(admin_client, backup_dir):
+    confirm = {"confirm": "manual-20261116-101500.dump"}
+    assert admin_client.post(RESTORE_URL, confirm, format="json").status_code == 503
+    (backup_dir / ".heartbeat").write_text(str(int(time.time())))
+    missing = "/api/backups/manual-20200101-000000.dump/restore/"
+    assert admin_client.post(missing, {"confirm": "manual-20200101-000000.dump"}, format="json").status_code == 404
+
+
+def test_status_reports_finished_restore_and_migrates_once(admin_client, online, monkeypatch):
+    from apps.core import views
+
+    calls = []
+    monkeypatch.setattr(views, "call_command", lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(views.MigrationExecutor, "migration_plan", lambda self, targets: ["pending"])
+    (online / ".restore-state").write_text(
+        '{"state": "done", "name": "manual-20261116-101500.dump", "message": "Restored", "at": 1, "id": "r1"}'
+    )
+    for _ in range(2):
+        assert admin_client.get("/api/backups/").json()["restore"]["state"] == "done"
+    assert calls == [("migrate",)]
+
+
+def test_safety_backups_are_listed(admin_client, online):
+    (online / "safety-20261116-120000.dump").write_bytes(b"PGDMP")
+    kinds = {b["name"]: b["kind"] for b in admin_client.get("/api/backups/").json()["backups"]}
+    assert kinds["safety-20261116-120000.dump"] == "safety"
+
+
+def test_restore_is_admin_only(manager_client, employee_client, anon_client, online):
+    for c in (manager_client, employee_client, anon_client):
+        assert c.post(RESTORE_URL, {"confirm": "manual-20261116-101500.dump"}, format="json").status_code in (401, 403)
+    assert not (online / ".restore-request").exists()
