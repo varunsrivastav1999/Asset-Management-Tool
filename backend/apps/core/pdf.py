@@ -1,6 +1,7 @@
 """PDF documents rendered with ReportLab (pure Python, no system deps)."""
 
 import io
+from dataclasses import dataclass
 
 from django.conf import settings
 from django.utils import timezone
@@ -230,16 +231,26 @@ def receipt_pdf(receipt) -> bytes:
     return _build(story, title)
 
 
-def labels_pdf(assets) -> bytes:
-    """A4 sheet of 3 x 8 asset labels with QR code, tag and name."""
+@dataclass(frozen=True)
+class Label:
+    """One sticker: QR code plus the code in large type, a title and an optional detail line."""
+
+    code: str
+    title: str
+    qr_payload: str
+    detail: str = ""
+
+
+def labels_pdf(labels: list[Label]) -> bytes:
+    """A4 sheet of 3 x 8 labels (assets, table rows, …) with QR code, code, title and organisation."""
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
-    c.setTitle("Asset labels")
+    c.setTitle("Labels")
     cols, rows = 3, 8
     margin_x, margin_y = 8 * mm, 12 * mm
     w = (A4[0] - 2 * margin_x) / cols
     h = (A4[1] - 2 * margin_y) / rows
-    for idx, asset in enumerate(assets):
+    for idx, label in enumerate(labels):
         pos = idx % (cols * rows)
         if idx and pos == 0:
             c.showPage()
@@ -248,17 +259,17 @@ def labels_pdf(assets) -> bytes:
         y = A4[1] - margin_y - (row + 1) * h
         c.setStrokeColor(LINE)
         c.roundRect(x + 2, y + 2, w - 4, h - 4, 4, stroke=1, fill=0)
-        qr = qr_drawing(asset.qr_payload, size=h - 8 * mm)
+        qr = qr_drawing(label.qr_payload, size=h - 8 * mm)
         qr.drawOn(c, x + 3 * mm, y + 4 * mm)
         tx = x + h - 2 * mm
         c.setFillColor(DARK)
         c.setFont("Helvetica-Bold", 10)
-        c.drawString(tx, y + h - 10 * mm, asset.asset_tag)
+        c.drawString(tx, y + h - 10 * mm, label.code[:24])
         c.setFont("Helvetica", 7)
-        c.drawString(tx, y + h - 14 * mm, asset.name[:28])
+        c.drawString(tx, y + h - 14 * mm, (label.title or "")[:28])
         c.setFillColor(MUTED)
-        if asset.serial_number:
-            c.drawString(tx, y + h - 18 * mm, f"S/N {asset.serial_number[:22]}")
+        if label.detail:
+            c.drawString(tx, y + h - 18 * mm, label.detail[:30])
         c.drawString(tx, y + 5 * mm, settings.ORG_NAME[:28])
     c.save()
     return buf.getvalue()

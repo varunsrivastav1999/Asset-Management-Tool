@@ -62,6 +62,13 @@ Everything day-to-day (users, departments, categories and custom fields, locatio
 - **Media columns:** in **Columns → Add column**, choose **Media (photo / file upload)**. Cells then take an uploaded photo (JPG, PNG, WEBP, GIF), PDF, Office file (DOCX/XLSX/PPTX), CSV/TXT or MP4, up to `MAX_MEDIA_UPLOAD_MB` (15 MB). Photos show as thumbnails; click to open, or use **Replace** and **Remove** when editing. Media columns work on custom and built-in tables (for example a "Photo" column on Assets).
 - Uploads are stored privately (never as public links) and checked by content, not just by extension. Only people who can see the page can open them. Files no cell refers to any more are removed daily, and deleting a table removes its uploads. Exports list the file name.
 
+### QR codes and barcodes for every entry
+
+- Every row of every custom table gets a permanent **code** when it is created, built from the table's name and the row number (for example `LIC-00012`). It never changes, even if the table is renamed or the row is moved. Existing rows got theirs on upgrade. Codes appear in a **Code** column (searchable and sortable) and in exports.
+- The **QR** button on each row (available to everyone who can see the table) shows the row's **QR code**, a link that opens the row, and its **Code128 barcode** for handheld scanners. You can download both, copy the code, or **Print label**. Select rows and use **Print labels** for an A4 sheet of 24 labels (QR, code, title, table name).
+- Scanning a QR with any phone camera opens the row (after sign-in). The in-app **Scan** page, and typing a code there, finds assets (tag or serial number) and table rows alike.
+- Assets have the same features on their detail page and in **Assets → Labels**.
+
 ### Reminders in practice
 
 - Open **Reminders** in the menu, or the bell button in any section's page header, which opens the rules already filtered to that section.

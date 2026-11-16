@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { tablesApi } from '@/api'
 import { parseError } from '@/api/http'
@@ -105,13 +105,10 @@ export function useTableConfig(table, { resource, names: defaults = {} } = {}) {
   )
 
   // The browser tab follows the table's current name (custom tables, renamed built-ins), not the route's static title.
-  watch(
-    () => names.value.plural,
-    (plural) => {
-      if (plural) document.title = `${plural} · ${APP_NAME}`
-    },
-    { immediate: true },
-  )
+  // Applied on mount too: on in-app navigation the router sets the route's static title after setup runs.
+  const applyTitle = () => names.value.plural && (document.title = `${names.value.plural} · ${APP_NAME}`)
+  watch(() => names.value.plural, applyTitle, { immediate: true })
+  onMounted(applyTitle)
 
   return { columns, visibleColumns, item, meta, names, supportsCustom, params, pageItemId, canEdit, canEditValues, setFromList, reload, toggle, resetMine, setCustomValue }
 }

@@ -3,7 +3,7 @@ import { inSentence } from '@/utils/format'
 import ReminderButton from '@/components/reminders/ReminderButton.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Archive, ArchiveRestore, Columns3, MoveRight, Pencil, Plus, Table2, Trash2, Upload } from 'lucide-vue-next'
+import { Archive, ArchiveRestore, Columns3, MoveRight, Pencil, Plus, Printer, QrCode, Table2, Trash2, Upload } from 'lucide-vue-next'
 import { definitionsApi, recordsApi } from '@/api'
 import { parseError } from '@/api/http'
 import { useList } from '@/composables/useList'
@@ -23,6 +23,7 @@ import ConfigurableTable from '@/components/table/ConfigurableTable.vue'
 import ColumnsPanel from '@/components/table/ColumnsPanel.vue'
 import RecordForm from '@/components/table/RecordForm.vue'
 import ImportDialog from '@/components/ui/ImportDialog.vue'
+import CodesDialog from '@/components/codes/CodesDialog.vue'
 
 /** Generic page for admin-created tables (/t/<slug>). */
 const route = useRoute()
@@ -57,6 +58,40 @@ watch(view, () => list.load())
 watch(() => list.error.value, (e) => e && /not found/i.test(e) && (notFound.value = true))
 
 const columnsOpen = ref(false)
+
+// --- QR codes, barcodes, labels -------------------------------------------------
+const codesOpen = ref(false)
+const codesRow = ref(null)
+function showCodes(row) {
+  codesRow.value = row
+  codesOpen.value = true
+}
+/** The row's first text value, used as its title on labels and in the code dialog. */
+const rowTitle = (row) => Object.values(row?.custom_data || {}).find((v) => typeof v === 'string' && v.trim()) || ''
+function printLabels({ ids, all }) {
+  recordsApi.labels(itemId.value, all ? { all: true } : { ids }).catch((e) => ui.error(parseError(e).message))
+}
+
+// Opened from a scanned code or QR link (/r/<code> → /t/<table>?open=<code>): filter to that row and show its
+// codes as soon as any load returns it (loads can be superseded, so don't wait on a particular one).
+const pendingOpen = ref('')
+function openByCode(code) {
+  if (!code) return
+  pendingOpen.value = String(code).toUpperCase()
+  list.filters.search = pendingOpen.value
+}
+openByCode(route.query.open)
+watch(() => route.query.open, openByCode)
+watch(
+  () => list.items.value,
+  (rows) => {
+    const row = pendingOpen.value && rows.find((r) => r.code === pendingOpen.value)
+    if (row) {
+      pendingOpen.value = ''
+      showCodes(row)
+    }
+  },
+)
 const importOpen = ref(false)
 const sortBy = (key) => (list.filters.ordering = list.filters.ordering === key ? `-${key}` : key)
 
@@ -183,7 +218,7 @@ const bulkConfig = computed(() => ({
           <ConfigurableTable
             :bulk="bulkConfig"
             :columns="cfg.visibleColumns.value"
-            :extra-columns="auth.isManager ? [{ key: '_actions', label: '', align: 'right', mobile: false }] : []"
+            :extra-columns="[{ key: '_actions', label: '', align: 'right' }]"
             :rows="list.items.value"
             :loading="list.loading.value"
             :offset="(list.page.value - 1) * 25"
@@ -197,6 +232,7 @@ const bulkConfig = computed(() => ({
           >
             <template #bulk-actions="ctx">
               <template v-if="view === 'active'">
+                <AppButton size="sm" variant="secondary" :icon="Printer" @click="printLabels(ctx)">Print labels</AppButton>
                 <AppButton size="sm" variant="secondary" :icon="Archive" @click="archive(ctx)">Archive</AppButton>
                 <AppButton size="sm" variant="secondary" :icon="MoveRight" @click="openMove(ctx)">Move</AppButton>
               </template>
@@ -204,8 +240,9 @@ const bulkConfig = computed(() => ({
             </template>
             <template #cell-_actions="{ row }">
               <div class="flex justify-end gap-1">
-                <AppButton v-if="view === 'active'" size="sm" variant="ghost" :icon="Pencil" aria-label="Edit" @click.stop="openForm(row)" />
-                <AppButton size="sm" variant="ghost" :icon="Trash2" aria-label="Delete" @click.stop="removeOne(row)" />
+                <AppButton size="sm" variant="ghost" :icon="QrCode" :aria-label="`QR code and barcode for ${row.code}`" @click.stop="showCodes(row)" />
+                <AppButton v-if="auth.isManager && view === 'active'" size="sm" variant="ghost" :icon="Pencil" aria-label="Edit" @click.stop="openForm(row)" />
+                <AppButton v-if="auth.isManager" size="sm" variant="ghost" :icon="Trash2" aria-label="Delete" @click.stop="removeOne(row)" />
               </div>
             </template>
             <template #empty>
@@ -219,6 +256,16 @@ const bulkConfig = computed(() => ({
       </div>
 
       <RecordForm v-model:open="formOpen" :columns="dataColumns" :record="editing" :title="`${editing ? 'Edit' : 'Add'} ${inSentence(names.singular)}`" :saving="saving" :errors="errors" @save="save" />
+      <CodesDialog
+        v-model:open="codesOpen"
+        :code="codesRow?.code || ''"
+        :title="codesRow ? `${codesRow.code} · ${rowTitle(codesRow)}` : ''"
+        :subtitle="names.plural"
+        :qr-path="codesRow ? recordsApi.qrPath(codesRow.id) : ''"
+        :barcode-path="codesRow ? recordsApi.barcodePath(codesRow.id) : ''"
+        :params="{ table_item: itemId }"
+        :print-label="auth.isManager && codesRow ? () => recordsApi.labels(itemId, { ids: [codesRow.id] }) : null"
+      />
       <ColumnsPanel v-model:open="columnsOpen" :cfg="cfg" :title="`${names.plural} columns`" />
       <ImportDialog
         v-if="auth.isManager"

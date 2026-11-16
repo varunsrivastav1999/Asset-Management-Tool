@@ -5,7 +5,7 @@ import re
 from django.db import transaction
 from django.http import HttpResponse
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
@@ -15,8 +15,12 @@ from rest_framework.response import Response
 
 from apps.audit.models import AuditLog
 from apps.audit.services import AuditedViewSetMixin, record, snapshot
+from apps.core import codes
 from apps.core.exceptions import DomainError
+from apps.core.hosts import frontend_url
+from apps.core.pdf import Label, labels_pdf
 from apps.core.permissions import IsAdmin, IsManager, ReadAnyWriteAdmin, is_admin, is_manager
+from apps.core.responses import file_response
 from apps.core.roles import effective_role, validate_roles
 
 from . import record_import
@@ -211,7 +215,7 @@ class TableDefinitionViewSet(AuditedViewSetMixin, viewsets.ModelViewSet):
                 is_searchable=c["type"] in ("text", "select", "status", "user"),
                 is_sortable=c["type"] not in ("file", "media"),
             )
-        for j, key in enumerate(("created_at", "updated_at")):
+        for j, key in enumerate(("code", "created_at", "updated_at")):
             TableColumn.objects.filter(sidebar_item=item, key=key).update(order=len(cols) + 1 + j)
         record(AuditLog.Action.CREATE, self.request.user, defn, {"after": snapshot(defn), "columns": [c["name"] for c in cols]})
         broadcast_sidebar_change()
@@ -280,8 +284,8 @@ class TableRecordSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TableRecord
-        fields = ["id", "custom_data", "is_archived", "created_by_name", "created_at", "updated_at"]
-        read_only_fields = ["is_archived", "created_at", "updated_at"]
+        fields = ["id", "code", "custom_data", "is_archived", "created_by_name", "created_at", "updated_at"]
+        read_only_fields = ["code", "is_archived", "created_at", "updated_at"]
 
     def validate_custom_data(self, data):
         if not isinstance(data, dict):
@@ -457,3 +461,82 @@ class TableRecordViewSet(ConfigurableTableMixin, viewsets.ModelViewSet):
                 changes={"file": upload.name, "created": report["created"]},
             )
         return Response(report, status=status.HTTP_400_BAD_REQUEST if report["errors"] else status.HTTP_200_OK)
+
+    # --- QR codes, barcodes, labels, scanning ------------------------------------------------
+    def _code_response(self, kind: str):
+        row = self.get_object()
+        fmt = self.request.query_params.get("fmt", "png" if kind == "qr" else "svg")
+        if kind == "qr":
+            payload = qr_payload(row)
+            data, ctype = (codes.qr_svg(payload), "image/svg+xml") if fmt == "svg" else (codes.qr_png(payload), "image/png")
+        else:
+            data, ctype = (
+                (codes.barcode_png(row.code), "image/png") if fmt == "png" else (codes.barcode_svg(row.code), "image/svg+xml")
+            )
+        return file_response(data, ctype, f"{row.code}-{kind}.{'svg' if ctype.endswith('xml') else 'png'}", inline=True)
+
+    @extend_schema(parameters=[OpenApiParameter("fmt", str, enum=["png", "svg"])], responses={200: OpenApiTypes.BINARY})
+    @action(detail=True, methods=["get"])
+    def qr(self, request, pk=None):
+        """QR code linking to this row (scan with any phone camera or the in-app scanner)."""
+        return self._code_response("qr")
+
+    @extend_schema(parameters=[OpenApiParameter("fmt", str, enum=["png", "svg"])], responses={200: OpenApiTypes.BINARY})
+    @action(detail=True, methods=["get"])
+    def barcode(self, request, pk=None):
+        """Code128 barcode of the row code (for handheld scanners)."""
+        return self._code_response("barcode")
+
+    @extend_schema(request=dict, responses={(200, "application/pdf"): OpenApiTypes.BINARY})
+    @action(detail=False, methods=["post"], permission_classes=[IsManager])
+    def labels(self, request):
+        """A4 label sheet (QR + code + title) for {ids: [...]} or {all: true} of this table."""
+        item = self.table_item()
+        qs = TableRecord.objects.filter(definition__sidebar_item=item, is_archived=False)
+        body = request.data or {}
+        if not body.get("all"):
+            ids = [int(i) for i in body.get("ids", []) if str(i).isdigit()]
+            if not ids:
+                raise DomainError("Choose the rows to print labels for.", field="ids")
+            qs = qs.filter(pk__in=ids)
+        rows = list(qs.order_by("code")[:MAX_LABELS])
+        if not rows:
+            raise DomainError("No matching rows.")
+        name = item.definition.name
+        labels = [Label(code=r.code, title=r.title, detail=name, qr_payload=qr_payload(r)) for r in rows]
+        return file_response(labels_pdf(labels), "application/pdf", f"{item.definition.slug}-labels.pdf")
+
+    @extend_schema(parameters=[OpenApiParameter("code", str, required=True)], responses={200: dict})
+    @action(detail=False, methods=["get"])
+    def lookup(self, request):
+        """Resolve a scanned row code (or its QR link) to the row and the page that shows it."""
+        raw = (request.query_params.get("code") or "").strip()
+        code = raw.rstrip("/").rsplit("/r/", 1)[-1].strip().upper()
+        row = TableRecord.objects.select_related("definition__sidebar_item").filter(code=code).first() if code else None
+        item = row.definition.sidebar_item if row and row.definition_id else None
+        if row is None or item is None:
+            raise NotFound("No row with that code.")
+        role = effective_role(request.user)
+        if not is_admin(request.user) and (not item.is_active or role not in item.visible_roles):
+            raise NotFound("No row with that code.")
+        if row.is_archived and not is_manager(request.user):
+            raise NotFound("No row with that code.")
+        return Response(
+            {
+                "id": row.pk,
+                "code": row.code,
+                "title": row.title,
+                "table": row.definition.name,
+                "table_item": item.pk,
+                "route": item.route,
+                "archived": row.is_archived,
+            }
+        )
+
+
+MAX_LABELS = 1000
+
+
+def qr_payload(row: TableRecord) -> str:
+    """What the QR code holds: a short link that opens the row (works from a phone camera too)."""
+    return f"{frontend_url()}/r/{row.code}"

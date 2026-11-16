@@ -397,6 +397,8 @@ TABLES: dict[str, TableDef] = {
         True,
         (
             SNO,
+            # Permanent row code: printed on labels, encoded in QR / barcodes, found by the scanner and search.
+            Builtin("code", "Code", "text", search=("code",), sort="code", get=lambda r: r.code, width=110),
             Builtin("created_at", "Created", "date", sort="created_at", get=lambda r: r.created_at.isoformat()),
             Builtin("updated_at", "Updated", "date", visible=False, sort="updated_at", get=lambda r: r.updated_at.isoformat()),
         ),

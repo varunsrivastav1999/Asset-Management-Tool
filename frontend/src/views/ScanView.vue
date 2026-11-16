@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Camera, CameraOff, Flashlight, Keyboard, ScanLine } from 'lucide-vue-next'
-import { assetsApi } from '@/api'
+import { resolveScan } from '@/utils/scan'
 import { useUiStore } from '@/stores/ui'
 import PageHeader from '@/components/ui/PageHeader.vue'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -24,12 +24,12 @@ async function resolve(code) {
   if (!value || state.value === 'resolving') return
   state.value = 'resolving'
   try {
-    const asset = await assetsApi.lookup(value)
+    const target = await resolveScan(value)
     navigator.vibrate?.(40)
     stop()
-    router.push(`/assets/${asset.id}`)
+    router.push(target)
   } catch (e) {
-    ui.warning(e.response?.status === 404 ? `No asset found for “${value}”` : 'Lookup failed, try again.')
+    ui.warning(e.response?.status === 404 ? `Nothing found for “${value}”` : 'Lookup failed, try again.')
     state.value = controls ? 'scanning' : 'idle'
     setTimeout(() => (lastCode = ''), 2500)
   }
@@ -74,7 +74,7 @@ onBeforeUnmount(stop)
 
 <template>
   <div class="mx-auto max-w-xl">
-    <PageHeader title="Scan asset" subtitle="Point the camera at a QR code or barcode label." />
+    <PageHeader title="Scan" subtitle="Point the camera at any QR code or barcode label — assets and table entries." />
 
     <div class="card relative overflow-hidden p-2">
       <div class="relative aspect-[3/4] overflow-hidden rounded-2xl bg-black sm:aspect-video">
@@ -104,7 +104,7 @@ onBeforeUnmount(stop)
     </div>
 
     <form class="card mt-4 flex items-end gap-2 p-4" @submit.prevent="resolve(manual)">
-      <AppInput v-model="manual" class="flex-1" label="Enter code manually" :icon="Keyboard" placeholder="AST-000123 or serial number" autocapitalize="characters" />
+      <AppInput v-model="manual" class="flex-1" label="Enter code manually" :icon="Keyboard" placeholder="Asset tag, serial number or entry code (e.g. LIC-00012)" autocapitalize="characters" />
       <AppButton type="submit" :loading="state === 'resolving'">Find</AppButton>
     </form>
   </div>

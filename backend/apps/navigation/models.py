@@ -125,10 +125,21 @@ class TableDefinition(TimeStampedModel):
         return self.name
 
 
+def record_code(slug: str, pk: int) -> str:
+    """Permanent row code shown on labels and encoded in QR / barcodes, e.g. "LIC-00012".
+
+    The prefix comes from the table's address when the row is created; the number is the row's id, so codes are
+    unique across all tables and never change (renaming the table or moving the row keeps the code).
+    """
+    letters = "".join(ch for ch in (slug or "") if ch.isalnum()).upper()
+    return f"{letters[:3] or 'REC'}-{pk:05d}"
+
+
 class TableRecord(TimeStampedModel):
     """A row of an admin-created (custom) table. Column values live in custom_data."""
 
     definition = models.ForeignKey(TableDefinition, null=True, blank=True, on_delete=models.SET_NULL, related_name="records")
+    code = models.CharField(max_length=24, unique=True, null=True, blank=True, editable=False)
     custom_data = models.JSONField(default=dict, blank=True)
     is_archived = models.BooleanField(default=False, db_index=True)
     archived_from = models.CharField(max_length=80, blank=True, help_text="Table name when the table was deleted")
@@ -138,7 +149,21 @@ class TableRecord(TimeStampedModel):
         ordering = ["-created_at", "-id"]
 
     def __str__(self):
-        return f"Record {self.pk}"
+        return self.code or f"Record {self.pk}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if not self.code:  # needs the id, so it's set right after the first insert
+            self.code = record_code(self.definition.slug if self.definition_id else "", self.pk)
+            type(self).objects.filter(pk=self.pk).update(code=self.code)
+
+    @property
+    def title(self) -> str:
+        """The row's first text value, for labels and lookups."""
+        for value in (self.custom_data or {}).values():
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return self.code or ""
 
 
 def table_media_path(instance, filename):

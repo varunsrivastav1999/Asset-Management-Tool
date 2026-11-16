@@ -1,6 +1,5 @@
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
-from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -12,13 +11,15 @@ from rest_framework.response import Response
 
 from apps.audit.models import AuditLog
 from apps.audit.services import AuditedViewSetMixin, diff, record, snapshot
+from apps.core import codes
 from apps.core.exceptions import DomainError
 from apps.core.invoices import InvoiceFileMixin
-from apps.core.pdf import labels_pdf
+from apps.core.pdf import Label, labels_pdf
 from apps.core.permissions import IsManager, ReadAnyWriteManager, is_manager
+from apps.core.responses import file_response as _file_response
 from apps.navigation.table_api import ConfigurableTableMixin
 
-from . import codes, importexport
+from . import importexport
 from .filters import AssetFilter
 from .models import Asset, AssetEvent, AssetPhoto, Category, Location, Vendor
 from .serializers import (
@@ -37,12 +38,13 @@ from .serializers import (
 from .services import change_status, log_event
 
 
-def _file_response(content: bytes, content_type: str, filename: str, inline=False):
-    response = HttpResponse(content, content_type=content_type)
-    disposition = "inline" if inline else "attachment"
-    response["Content-Disposition"] = f'{disposition}; filename="{filename}"'
-    response["Cache-Control"] = "private, max-age=0, no-store"
-    return response
+def asset_label(asset) -> Label:
+    return Label(
+        code=asset.asset_tag,
+        title=asset.name,
+        detail=f"S/N {asset.serial_number[:22]}" if asset.serial_number else "",
+        qr_payload=asset.qr_payload,
+    )
 
 
 class CategoryViewSet(AuditedViewSetMixin, viewsets.ModelViewSet):
@@ -356,7 +358,7 @@ class AssetViewSet(InvoiceFileMixin, ConfigurableTableMixin, AuditedViewSetMixin
         assets = list(Asset.objects.filter(pk__in=serializer.validated_data["ids"]).order_by("asset_tag"))
         if not assets:
             raise DomainError("No matching assets.")
-        return _file_response(labels_pdf(assets), "application/pdf", "asset-labels.pdf")
+        return _file_response(labels_pdf([asset_label(a) for a in assets]), "application/pdf", "asset-labels.pdf")
 
     # --- import / export --------------------------------------------------
     @extend_schema(parameters=[OpenApiParameter("file_format", str, enum=["csv", "xlsx"])])

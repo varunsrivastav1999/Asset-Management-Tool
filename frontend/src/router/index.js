@@ -16,6 +16,7 @@ const routes = [
       { path: 'assets/:id(\\d+)', name: 'asset', component: () => import('@/views/assets/AssetDetailView.vue'), meta: { title: 'Asset' } },
       { path: 'assets/:id(\\d+)/edit', name: 'asset-edit', component: () => import('@/views/assets/AssetFormView.vue'), meta: { title: 'Edit asset', roles: ['manager'] } },
       { path: 'a/:tag', name: 'asset-short', component: () => import('@/views/assets/AssetShortLinkView.vue'), meta: { title: 'Asset' } },
+      { path: 'r/:code', name: 'record-short', component: () => import('@/views/RecordShortLinkView.vue'), meta: { title: 'Entry' } },
       { path: 'scan', name: 'scan', component: () => import('@/views/ScanView.vue'), meta: { title: 'Scan' } },
       { path: 'receiving', name: 'receipts', component: () => import('@/views/receiving/ReceiptsView.vue'), meta: { title: 'Receiving', roles: ['manager'] } },
       { path: 'receiving/new', name: 'receipt-new', component: () => import('@/views/receiving/ReceiptCreateView.vue'), meta: { title: 'Receive goods', roles: ['manager'] } },
@@ -67,7 +68,9 @@ router.beforeEach(async (to) => {
   return true
 })
 
-router.afterEach((to) => {
+router.afterEach((to, from) => {
+  // Query-only changes (filters, paging, search) keep the page title — tables set it from their current name.
+  if (from.matched.length && to.path === from.path) return
   document.title = to.meta.title ? `${to.meta.title} · ${APP_NAME}` : APP_NAME
 })
 

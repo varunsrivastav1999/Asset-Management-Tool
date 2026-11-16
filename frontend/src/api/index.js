@@ -1,4 +1,4 @@
-import { http } from './http'
+import { downloadFile, http } from './http'
 
 const unwrap = (p) => p.then((r) => r.data)
 
@@ -120,6 +120,12 @@ export const recordsApi = {
   remove: (item, id) => unwrap(http.delete(`/records/${id}/`, { params: { table_item: item } })),
   archive: (item, body) => unwrap(http.post('/records/bulk-archive/', body, { params: { table_item: item } })),
   move: (item, body) => unwrap(http.post('/records/bulk-move/', body, { params: { table_item: item } })),
+  get: (item, id) => unwrap(http.get(`/records/${id}/`, { params: { table_item: item } })),
+  lookup: (code) => unwrap(http.get('/records/lookup/', { params: { code } })),
+  qrPath: (id) => `/records/${id}/qr/`,
+  barcodePath: (id) => `/records/${id}/barcode/`,
+  /** Opens an A4 label sheet (PDF) for { ids } or { all: true }. */
+  labels: (item, body) => downloadFile('/records/labels/', { method: 'post', params: { table_item: item }, data: body, open: true }),
   importFile: (item, file, dryRun) => {
     const form = new FormData()
     form.append('file', file)
