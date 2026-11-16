@@ -66,8 +66,12 @@ function showCodes(row) {
   codesRow.value = row
   codesOpen.value = true
 }
-/** The row's first text value, used as its title on labels and in the code dialog. */
-const rowTitle = (row) => Object.values(row?.custom_data || {}).find((v) => typeof v === 'string' && v.trim()) || ''
+/** The row's first filled text value in column order (JSON key order is not column order). */
+const rowTitle = (row) => {
+  const data = row?.custom_data || {}
+  const key = dataColumns.value.map((c) => c.key).find((k) => typeof data[k] === 'string' && data[k].trim())
+  return key ? data[key].trim() : ''
+}
 function printLabels({ ids, all }) {
   recordsApi.labels(itemId.value, all ? { all: true } : { ids }).catch((e) => ui.error(parseError(e).message))
 }

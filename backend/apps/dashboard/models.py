@@ -18,7 +18,7 @@ class DashboardWidget(TimeStampedModel):
 
     title = models.CharField(max_length=80)
     widget_type = models.CharField("type", max_length=16, choices=Type.choices)
-    data_source = models.CharField(max_length=48)
+    data_source = models.CharField(max_length=120)  # registry key or table:<id>:<kind>[:<column>]
     chart_type = models.CharField(max_length=16, blank=True, help_text="doughnut | bar | hbar | line (charts only)")
     size = models.CharField(max_length=8, choices=Size.choices, default=Size.SM)
     position = models.PositiveIntegerField(default=0, db_index=True)

@@ -21,6 +21,8 @@ const props = defineProps({
   offset: { type: Number, default: 0 },
   editable: Boolean,
   save: { type: Function, default: null },
+  /** Thumbnail size for Media cells ('lg' on cards). */
+  mediaSize: { type: String, default: 'sm' },
 })
 const ui = useUiStore()
 
@@ -131,7 +133,7 @@ async function commit() {
       </template>
       <span v-else class="text-muted">{{ row.department_name && col.key === 'assigned_to' ? row.department_name : '—' }}</span>
     </span>
-    <MediaValue v-else-if="col.type === 'media'" :value="raw" class="min-w-0" />
+    <MediaValue v-else-if="col.type === 'media'" :value="raw" :size="mediaSize" class="min-w-0" />
     <a v-else-if="col.type === 'file' && raw" :href="raw" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-sm text-accent hover:underline" @click.stop><FileText class="h-3.5 w-3.5" /> Open</a>
     <span v-else-if="col.type === 'date'" class="text-sm whitespace-nowrap">
       {{ display }}

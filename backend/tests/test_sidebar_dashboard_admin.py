@@ -232,3 +232,14 @@ def test_django_admin_is_superuser_only(client, admin_user, manager):
         "workflows/handoveritem/",
     ):
         assert client.get(f"/admin/{path}").status_code == 200, path
+
+
+def test_table_page_can_be_shown_as_cards(admin_client, manager_client):
+    from apps.navigation.models import SidebarItem
+
+    page = SidebarItem.objects.filter(route="/catalog/locations").first()
+    res = admin_client.patch(f"/api/sidebar-items/{page.pk}/", {"view": "cards"}, format="json")
+    assert res.status_code == 200 and res.data["view"] == "cards"
+    assert admin_client.patch(f"/api/sidebar-items/{page.pk}/", {"view": "gallery"}, format="json").status_code == 400
+    nodes = [n for g in manager_client.get("/api/sidebar/").data["items"] for n in [g, *g.get("children", [])]]
+    assert next(n for n in nodes if n.get("route") == "/catalog/locations")["view"] == "cards"

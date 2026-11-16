@@ -10,6 +10,8 @@
   --bg-2: #e3e9f5;
   --surface: rgb(255 255 255 / 0.62);
   --surface-strong: rgb(255 255 255 / 0.9);
+  /* Opaque stand-in for a glass card, for things that must hide content scrolling underneath them. */
+  --surface-solid: #f8fafc;
   --surface-hover: rgb(255 255 255 / 0.85);
   --ink: #0b1220;
   --muted: #5b6478;
@@ -45,6 +47,7 @@
   --bg-2: #0a0f1d;
   --surface: rgb(17 24 39 / 0.55);
   --surface-strong: rgb(13 19 33 / 0.92);
+  --surface-solid: #0e1424;
   --surface-hover: rgb(30 41 59 / 0.6);
   --ink: #e6ecff;
   --muted: #8b95ad;

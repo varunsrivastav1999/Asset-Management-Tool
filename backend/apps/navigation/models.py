@@ -40,6 +40,13 @@ class SidebarItem(TimeStampedModel):
     # Pages that render a data table point at a table definition (see navigation.tables).
     table = models.CharField(max_length=32, blank=True, help_text="Table definition key, e.g. 'assets'")
 
+    class View(models.TextChoices):
+        TABLE = "table", "Table (rows and columns)"
+        CARDS = "cards", "Cards"
+
+    # How a table page shows its rows. Cards use the same column setup (title, photo, badges, fields).
+    view = models.CharField(max_length=8, choices=View.choices, default=View.TABLE)
+
     class Meta:
         ordering = ["order", "id"]
 
@@ -159,11 +166,29 @@ class TableRecord(TimeStampedModel):
 
     @property
     def title(self) -> str:
-        """The row's first text value, for labels and lookups."""
-        for value in (self.custom_data or {}).values():
+        """The row's name for labels and lookups: its first filled text value in column order."""
+        return self.title_from(title_keys(self.definition))
+
+    def title_from(self, keys: list[str]) -> str:
+        """Same as `title` with the column order precomputed (use for many rows of one table)."""
+        data = self.custom_data or {}
+        # JSON keys come back in storage order, not column order, so walk the table's columns.
+        for key in [*keys, *data]:
+            value = data.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
         return self.code or ""
+
+
+def title_keys(definition) -> list[str]:
+    """A table's own column keys in display order (titles use the first filled one)."""
+    if definition is None:
+        return []
+    return list(
+        TableColumn.objects.filter(sidebar_item_id=definition.sidebar_item_id, is_builtin=False)
+        .order_by("order", "id")
+        .values_list("key", flat=True)
+    )
 
 
 def table_media_path(instance, filename):

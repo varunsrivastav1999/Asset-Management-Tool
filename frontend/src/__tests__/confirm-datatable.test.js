@@ -238,14 +238,27 @@ describe('ConfigurableTable bulk actions', () => {
 })
 
 describe('DataTable row actions', () => {
-  it('pins the actions column to the right edge so Edit/Delete never scroll away', async () => {
+  it('is an ordinary column when everything fits, and pins with a fade when columns are hidden', async () => {
     const DataTable = (await import('@/components/ui/DataTable.vue')).default
     const w = mount(DataTable, {
+      attachTo: document.body,
       props: { columns: [{ key: 'name', label: 'Name' }, { key: 'code', label: 'Code' }, { key: 'actions', label: '' }], rows: [{ id: 1, name: 'Finance', code: 'FIN' }] },
     })
-    const cells = w.findAll('tbody tr:first-child td')
-    expect(cells.at(-1).classes()).toContain('sticky')
-    expect(cells.at(0).classes()).not.toContain('sticky')
+    wrappers.push(w)
+    const lastCell = () => w.findAll('tbody tr:first-child td').at(-1)
+    expect(lastCell().classes()).not.toContain('sticky') // fits: no box, blends into the card
+
+    const scroller = w.find('.overflow-x-auto').element
+    Object.defineProperties(scroller, { scrollWidth: { value: 900, configurable: true }, clientWidth: { value: 600, configurable: true } })
+    scroller.dispatchEvent(new Event('scroll'))
+    await nextTick()
+    expect(lastCell().classes()).toContain('sticky')
     expect(w.findAll('thead th').at(-1).classes()).toContain('right-0')
+    expect(w.findAll('tbody tr:first-child td').at(0).classes()).not.toContain('sticky')
+
+    Object.defineProperty(scroller, 'scrollLeft', { value: 300, configurable: true }) // scrolled to the end
+    scroller.dispatchEvent(new Event('scroll'))
+    await nextTick()
+    expect(lastCell().classes()).not.toContain('sticky')
   })
 })

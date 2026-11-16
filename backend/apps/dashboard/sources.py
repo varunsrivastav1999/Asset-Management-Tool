@@ -7,6 +7,7 @@ Organisation-wide sources are manager+ only; that rule is enforced when widgets 
 
 from apps.assets.models import Asset
 
+from . import table_sources
 from .views import CACHE_KEY, CACHE_TTL, compute_stats, personal_stats
 
 STAT, CHART, TABLE = "stat", "chart", "table"
@@ -51,15 +52,28 @@ def source_choices():
     return [(k, v["label"]) for k, v in SOURCES.items()]
 
 
+def source_meta(source: str) -> dict | None:
+    """Catalog entry for any source: the fixed ones above, or one built from a custom table (table:<id>:...)."""
+    return SOURCES.get(source) or table_sources.meta(source)
+
+
 def allowed_roles(source: str) -> list[str]:
-    return ["admin", "manager"] if SOURCES[source]["scope"] == ORG else ["admin", "manager", "employee"]
+    meta = source_meta(source)
+    if meta is None:
+        return []
+    if meta["scope"] == "table":  # whoever can see the table's page
+        return (
+            [r for r in ("admin", "manager", "employee") if r == "admin" or r in meta["roles"]] if meta["active"] else ["admin"]
+        )
+    return ["admin", "manager"] if meta["scope"] == ORG else ["admin", "manager", "employee"]
 
 
 def catalog():
-    return [
+    fixed = [
         {
             "key": k,
             "label": v["label"],
+            "group": "Assets & workflows",
             "types": v["types"],
             "charts": v.get("charts", []),
             "scope": v["scope"],
@@ -67,6 +81,19 @@ def catalog():
         }
         for k, v in SOURCES.items()
     ]
+    tables = [
+        {
+            "key": t["key"],
+            "label": t["label"],
+            "group": f"Table: {t['group']}",
+            "types": t["types"],
+            "charts": t.get("charts", []),
+            "scope": "table",
+            "allowed_roles": allowed_roles(t["key"]),
+        }
+        for t in table_sources.catalog()
+    ]
+    return fixed + tables
 
 
 class DataContext:
@@ -225,4 +252,6 @@ RESOLVERS = {
 def resolve(source: str, ctx: DataContext):
     """Widget payload for a data source, or None for an unknown key."""
     builder = RESOLVERS.get(source)
-    return builder(ctx) if builder else None
+    if builder:
+        return builder(ctx)
+    return table_sources.resolve(source, ctx)

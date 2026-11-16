@@ -3,13 +3,17 @@ import datetime
 from celery import shared_task
 from django.utils import timezone
 
-from .models import TableMedia, TableRecord
+from .models import TableColumn, TableMedia, TableRecord
 from .tables import model_for
 
 
 def is_referenced(media: TableMedia) -> bool:
-    """Whether any row of the media's table still points at it."""
+    """Whether a cell of a still-existing Media column points at it (a deleted column's files are unused)."""
     item = media.sidebar_item
+    if not TableColumn.objects.filter(
+        sidebar_item__table=item.table, key=media.column_key, column_type=TableColumn.Type.MEDIA, is_builtin=False
+    ).exists():
+        return False
     lookup = {f"custom_data__{media.column_key}__id": str(media.pk)}
     if item.table == "custom":
         return TableRecord.objects.filter(definition__sidebar_item=item, **lookup).exists()

@@ -69,6 +69,12 @@ Everything day-to-day (users, departments, categories and custom fields, locatio
 - Scanning a QR with any phone camera opens the row (after sign-in). The in-app **Scan** page, and typing a code there, finds assets (tag or serial number) and table rows alike.
 - Assets have the same features on their detail page and in **Assets → Labels**.
 
+### More table options
+
+- **Columns of existing tables:** in **Settings → Sidebar & tables → Tables**, open a table to add, rename or delete its columns. Built-in columns can be renamed but not deleted; hide them per page from the table's **Columns** panel. Values of a deleted column stay stored and come back if a column with the same name is added again. Uploads of a deleted Media column are cleaned up.
+- **Display as Table or Cards:** in **Settings → Sidebar & tables → Menu**, edit any table page and choose **Display as: Cards**. Each row becomes a card built from that page's own columns: a photo (Media column), the first text column as the title, the code, status/select/yes-no values as badges, and up to six labelled fields, with the row actions at the bottom. Selection, bulk actions, inline editing and permissions work the same. Wide tables in table view keep their row actions pinned to the right while scrolling.
+- **Dashboard widgets from custom tables:** in **Settings → Dashboard → Add widget**, every custom table offers *number of rows* (stat), *by <column>* for each Select/Status/Yes-No/Person column (doughnut or bar chart), and *latest rows* (table, each linking to its row). A table widget is only shown to roles that can see that table, and it disappears if the table is deleted.
+
 ### Reminders in practice
 
 - Open **Reminders** in the menu, or the bell button in any section's page header, which opens the rules already filtered to that section.

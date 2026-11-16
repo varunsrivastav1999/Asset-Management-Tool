@@ -58,6 +58,10 @@ const errors = ref({})
 const form = reactive({})
 const previewRole = ref('employee')
 const tableOptions = ref([])
+const VIEW_OPTIONS = [
+  { value: 'table', label: 'Table (rows and columns)' },
+  { value: 'cards', label: 'Cards' },
+]
 
 async function load() {
   loading.value = true
@@ -148,6 +152,7 @@ function openForm(item = null, parent = null) {
     gradient: item?.gradient ?? false,
     glow: item?.glow ?? false,
     table: item?.table || '',
+    view: item?.view || 'table',
   })
   open.value = true
 }
@@ -342,7 +347,11 @@ onBeforeRouteLeave(async () => !dirty.value || (await ui.confirm({ title: 'Disca
           <AppInput v-model="form.url" label="URL" type="url" placeholder="https://" required :error="errors.url" />
           <label class="flex items-center gap-2 self-end pb-2 text-sm"><input v-model="form.open_in_new_tab" type="checkbox" class="h-4 w-4 accent-[var(--accent)]" /> Open in a new tab</label>
         </template>
-        <AppSelect v-if="form.type === 'page'" v-model="form.table" class="sm:col-span-2" label="Table on this page" placeholder="Detect from route" :options="tableOptions" />
+        <AppSelect v-if="form.type === 'page'" v-model="form.table" label="Table on this page" placeholder="Detect from route" :options="tableOptions" />
+        <div v-if="form.type === 'page'">
+          <AppSelect v-model="form.view" label="Display as" :options="VIEW_OPTIONS" />
+          <p class="mt-1 text-xs text-muted">Cards show the photo, title, badges and key fields of each row, like the Categories page.</p>
+        </div>
         <IconPicker v-if="form.type !== 'divider'" v-model="form.icon" class="sm:col-span-2" />
         <fieldset v-if="form.type !== 'divider'" class="rounded-2xl border border-line p-4 sm:col-span-2">
           <legend class="px-1 text-sm font-semibold">Appearance</legend>

@@ -1,4 +1,4 @@
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, provide, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { tablesApi } from '@/api'
 import { parseError } from '@/api/http'
@@ -7,6 +7,8 @@ import { useNotificationsStore } from '@/stores/notifications'
 import { useSidebarStore } from '@/stores/sidebar'
 import { useUiStore } from '@/stores/ui'
 import { APP_NAME } from '@/brand'
+
+export const TABLE_LAYOUT = Symbol('tableLayout')
 
 /**
  * Column configuration for a table page.
@@ -110,5 +112,9 @@ export function useTableConfig(table, { resource, names: defaults = {} } = {}) {
   watch(() => names.value.plural, applyTitle, { immediate: true })
   onMounted(applyTitle)
 
-  return { columns, visibleColumns, item, meta, names, supportsCustom, params, pageItemId, canEdit, canEditValues, setFromList, reload, toggle, resetMine, setCustomValue }
+  // Display chosen for this page in Sidebar settings ("table" or "cards"); the page's ConfigurableTable injects it.
+  const layout = computed(() => sidebar.pages.find((p) => p.id === pageItemId.value)?.view || 'table')
+  provide(TABLE_LAYOUT, layout)
+
+  return { layout, columns, visibleColumns, item, meta, names, supportsCustom, params, pageItemId, canEdit, canEditValues, setFromList, reload, toggle, resetMine, setCustomValue }
 }

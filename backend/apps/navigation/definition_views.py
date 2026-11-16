@@ -25,7 +25,7 @@ from apps.core.roles import effective_role, validate_roles
 
 from . import record_import
 from .definitions import unique_slug
-from .models import SidebarItem, TableColumn, TableDefinition, TableRecord
+from .models import SidebarItem, TableColumn, TableDefinition, TableRecord, title_keys
 from .serializers import ICON_RE
 from .signals import broadcast_sidebar_change
 from .table_api import ConfigurableTableMixin, clean_options, coerce_value
@@ -503,7 +503,8 @@ class TableRecordViewSet(ConfigurableTableMixin, viewsets.ModelViewSet):
         if not rows:
             raise DomainError("No matching rows.")
         name = item.definition.name
-        labels = [Label(code=r.code, title=r.title, detail=name, qr_payload=qr_payload(r)) for r in rows]
+        keys = title_keys(item.definition)
+        labels = [Label(code=r.code, title=r.title_from(keys), detail=name, qr_payload=qr_payload(r)) for r in rows]
         return file_response(labels_pdf(labels), "application/pdf", f"{item.definition.slug}-labels.pdf")
 
     @extend_schema(parameters=[OpenApiParameter("code", str, required=True)], responses={200: dict})

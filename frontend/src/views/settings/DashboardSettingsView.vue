@@ -35,7 +35,8 @@ const TONES = ['accent', 'violet', 'amber', 'rose', 'emerald']
 
 async function load() {
   try {
-    const [list, meta] = await Promise.all([widgetsApi.list(), sources.value.length ? null : widgetsApi.sources()])
+    // Sources are refetched each time: new custom tables (and their columns) become widget sources right away.
+    const [list, meta] = await Promise.all([widgetsApi.list(), widgetsApi.sources()])
     widgets.value = list
     if (meta) {
       sources.value = meta.sources
@@ -53,7 +54,9 @@ watch(() => notes.layoutTick, () => !open.value && load())
 
 const sourceMap = computed(() => Object.fromEntries(sources.value.map((s) => [s.key, s])))
 const sourceOptions = computed(() =>
-  sources.value.filter((s) => s.types.includes(form.type)).map((s) => ({ value: s.key, label: `${s.label}${s.scope === 'org' ? '' : ' (personal)'}` })),
+  sources.value
+    .filter((s) => s.types.includes(form.type))
+    .map((s) => ({ value: s.key, label: `${s.label}${s.scope === 'personal' ? ' (personal)' : ''}`, group: s.group })),
 )
 const current = computed(() => sourceMap.value[form.data_source])
 const allowedRoles = computed(() => current.value?.allowed_roles || ['admin', 'manager', 'employee'])

@@ -210,3 +210,15 @@ def test_media_column_on_a_builtin_table(admin_client, manager_client, asset):
     res = manager_client.patch(f"/api/assets/{asset.pk}/custom-data/", {"photo": value}, format="json")
     assert res.status_code == 200, res.data
     assert purge_orphan_table_media(min_age_hours=0) == 0  # referenced from the asset
+
+
+def test_files_of_a_deleted_media_column_are_purged(admin_client, manager_client, table, django_capture_on_commit_callbacks):
+    value = upload(manager_client, table, png_bytes()).data
+    manager_client.post(
+        f"/api/records/?table_item={table['sidebar_item']}", {"custom_data": {"product": "A", "proof": value}}, format="json"
+    )
+    assert purge_orphan_table_media(min_age_hours=0) == 0  # still used
+    col = TableColumn.objects.get(sidebar_item_id=table["sidebar_item"], key="proof")
+    assert admin_client.delete(f"/api/table-columns/{col.pk}/").status_code == 204
+    with django_capture_on_commit_callbacks(execute=True):
+        assert purge_orphan_table_media(min_age_hours=0) == 1  # column gone -> file unused

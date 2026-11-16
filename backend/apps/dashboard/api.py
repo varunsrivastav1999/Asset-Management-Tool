@@ -16,7 +16,7 @@ from .defaults import seed_widgets
 from .models import DashboardWidget
 from .serializers import DashboardWidgetSerializer, WidgetReorderSerializer
 from .signals import broadcast_layout_change
-from .sources import SOURCES, DataContext, allowed_roles, catalog, resolve
+from .sources import DataContext, allowed_roles, catalog, resolve, source_meta
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ def dashboard(request):
     ctx = DataContext(request.user)
     out = []
     for w in DashboardWidget.objects.filter(is_active=True).order_by("position", "id"):
-        if role not in (w.visible_roles or []) or w.data_source not in SOURCES:
+        if role not in (w.visible_roles or []) or source_meta(w.data_source) is None:
             continue
         # Defence in depth: never serve org-wide data to a role the source doesn't allow,
         # even if a stale or hand-edited widget row says otherwise.

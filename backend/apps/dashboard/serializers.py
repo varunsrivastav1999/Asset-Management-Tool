@@ -3,7 +3,7 @@ from rest_framework import serializers
 from apps.core.roles import validate_roles
 
 from .models import DashboardWidget
-from .sources import CHART_TYPES, SOURCES, allowed_roles
+from .sources import CHART_TYPES, allowed_roles, source_meta
 
 TONES = {"accent", "violet", "amber", "rose", "emerald"}
 
@@ -54,7 +54,7 @@ class DashboardWidgetSerializer(serializers.ModelSerializer):
         get = lambda k: attrs.get(k, getattr(self.instance, k, None))  # noqa: E731
         kind, source = get("widget_type"), get("data_source")
         errors = {}
-        meta = SOURCES.get(source)
+        meta = source_meta(source)
         if meta is None:
             errors["data_source"] = "Unknown data source."
         elif kind not in meta["types"]:
@@ -70,9 +70,8 @@ class DashboardWidgetSerializer(serializers.ModelSerializer):
         if meta and roles:
             forbidden = [r for r in roles if r not in allowed_roles(source)]
             if forbidden:
-                errors["visible_roles"] = (
-                    f"'{meta['label']}' contains organisation-wide data and can't be shown to: {', '.join(forbidden)}."
-                )
+                why = "comes from a table they can't see" if meta["scope"] == "table" else "contains organisation-wide data"
+                errors["visible_roles"] = f"'{meta['label']}' {why}, so it can't be shown to: {', '.join(forbidden)}."
         if errors:
             raise serializers.ValidationError(errors)
         return attrs

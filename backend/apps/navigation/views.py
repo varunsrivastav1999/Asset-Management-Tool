@@ -49,6 +49,7 @@ def build_tree(items, role: str | None):
                 "gradient": item.gradient,
                 "glow": item.glow,
                 "table": item.table,
+                "view": item.view,
                 "table_meta": meta(definition_of(item)),
             }
             if item.item_type == SidebarItem.Type.GROUP:

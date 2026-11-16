@@ -96,6 +96,7 @@ export const tablesApi = {
   columns: (table, item) => unwrap(http.get(`/tables/${table}/columns/`, { params: item ? { item } : {} })),
   savePrefs: (item, hidden, shown) => unwrap(http.put('/tables/prefs/', { item, hidden, shown })),
   clearPrefs: (item) => unwrap(http.delete('/tables/prefs/', { params: { item } })),
+  listColumns: (sidebarItem) => unwrap(http.get('/table-columns/', { params: { sidebar_item: sidebarItem } })),
   createColumn: (data) => unwrap(http.post('/table-columns/', data)),
   updateColumn: (id, data) => unwrap(http.patch(`/table-columns/${id}/`, data)),
   deleteColumn: (id) => unwrap(http.delete(`/table-columns/${id}/`)),

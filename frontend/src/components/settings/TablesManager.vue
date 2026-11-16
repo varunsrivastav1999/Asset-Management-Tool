@@ -15,6 +15,7 @@ import DataTable from '@/components/ui/DataTable.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import IconPicker from '@/components/settings/IconPicker.vue'
 import RoleChecklist from '@/components/settings/RoleChecklist.vue'
+import TableColumnsEditor from '@/components/settings/TableColumnsEditor.vue'
 import { iconFor } from '@/utils/icons'
 import { COLUMN_TYPES, hasOptions, optionsPlaceholder, parseOptions } from '@/utils/columnTypes'
 
@@ -170,6 +171,10 @@ const singularHint = computed(() => (form.name ? `Used in buttons: “Add ${form
         <AppSelect v-model="form.parent" :label="editing ? 'Move to menu group' : 'Menu group'" :placeholder="editing ? 'Keep current' : 'Top level'" :options="groups" />
         <RoleChecklist v-model="form.visible_roles" :error="errors.visible_roles" />
         <IconPicker v-model="form.icon" class="sm:col-span-2" />
+        <div v-if="editing" class="sm:col-span-2">
+          <span class="label">Columns</span>
+          <TableColumnsEditor :item="editing.sidebar_item" @changed="emit('changed')" />
+        </div>
         <div v-if="!editing" class="sm:col-span-2">
           <div class="mb-2 flex items-center justify-between">
             <span class="label mb-0">Columns</span>

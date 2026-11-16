@@ -1,5 +1,6 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useResizeObserver } from '@vueuse/core'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-vue-next'
 
 const selected = defineModel('selected', { type: Array, default: () => [] })
@@ -30,15 +31,30 @@ const mobileCols = computed(() => props.columns.filter((c) => c.mobile !== false
 
 // Row actions stay pinned to the right edge, so Edit/Delete never scroll out of reach on narrow screens
 // or wide (admin-configured) tables. A column can opt in/out with `sticky: true|false`.
+// Pinning only kicks in while columns are actually hidden to the right; otherwise the column is ordinary
+// and blends into the glass card. When pinned, a soft fade (not a solid box) separates it from the content.
 const isPinned = (c) => c.sticky ?? (c.key === 'actions' || c.key === '_actions')
-const PINNED = 'sticky right-0 z-[1] bg-surface-strong shadow-[-10px_0_12px_-12px_rgb(0_0_0/0.35)]'
+const scroller = ref(null)
+const table = ref(null)
+const hiddenRight = ref(false)
+function measure() {
+  const el = scroller.value
+  hiddenRight.value = !!el && el.scrollLeft + el.clientWidth < el.scrollWidth - 1
+}
+useResizeObserver(scroller, measure)
+useResizeObserver(table, measure)
+onMounted(measure)
+watch(() => [props.rows, props.columns], () => nextTick(measure))
+const pinnedClass = computed(() =>
+  hiddenRight.value ? 'sticky right-0 z-[1] bg-[linear-gradient(to_right,transparent,var(--surface-solid)_2rem)] pl-10' : '',
+)
 </script>
 
 <template>
   <div>
     <!-- Desktop / tablet -->
-    <div class="hidden overflow-x-auto md:block">
-      <table class="w-full text-left text-sm">
+    <div ref="scroller" class="hidden overflow-x-auto md:block" :data-overflowing="hiddenRight || undefined" @scroll.passive="measure">
+      <table ref="table" class="w-full text-left text-sm">
         <thead>
           <tr class="border-b border-line text-xs tracking-wide text-muted uppercase">
             <th v-if="selectable" class="w-10 px-4 py-3">
@@ -48,7 +64,7 @@ const PINNED = 'sticky right-0 z-[1] bg-surface-strong shadow-[-10px_0_12px_-12p
               v-for="c in columns"
               :key="c.key"
               class="px-4 py-3 font-medium whitespace-nowrap"
-              :class="[c.class, c.align === 'right' && 'text-right', isPinned(c) && PINNED]"
+              :class="[c.class, c.align === 'right' && 'text-right', isPinned(c) && pinnedClass]"
               :style="c.width ? { width: `${c.width}px`, minWidth: `${c.width}px` } : undefined"
               :aria-sort="sortState(c.key) === 'asc' ? 'ascending' : sortState(c.key) === 'desc' ? 'descending' : undefined"
             >
@@ -80,7 +96,7 @@ const PINNED = 'sticky right-0 z-[1] bg-surface-strong shadow-[-10px_0_12px_-12p
             <td v-if="selectable" class="px-4 py-3" @click.stop>
               <input type="checkbox" class="h-4 w-4 accent-[var(--accent)]" :checked="selected.includes(row[rowKey])" :aria-label="`Select ${row[rowKey]}`" @change="toggle(row[rowKey])" />
             </td>
-            <td v-for="c in columns" :key="c.key" class="px-4 py-3" :class="[c.class, c.align === 'right' && 'text-right', isPinned(c) && PINNED]">
+            <td v-for="c in columns" :key="c.key" class="px-4 py-3" :class="[c.class, c.align === 'right' && 'text-right', isPinned(c) && pinnedClass]">
               <slot :name="`cell-${c.key}`" :row="row" :value="value(row, c.key)" :index="ri">{{ value(row, c.key) ?? '—' }}</slot>
             </td>
           </tr>

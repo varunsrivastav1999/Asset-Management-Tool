@@ -34,6 +34,7 @@ class SidebarItemSerializer(serializers.ModelSerializer):
             "gradient",
             "glow",
             "table",
+            "view",
             "updated_at",
         ]
         read_only_fields = ["updated_at"]

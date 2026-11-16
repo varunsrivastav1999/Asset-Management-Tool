@@ -1,6 +1,6 @@
 <script setup>
 import { inSentence } from '@/utils/format'
-import { computed, ref, useSlots, watch } from 'vue'
+import { computed, inject, ref, useSlots, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import { ChevronDown, Download, RefreshCcw, Trash2, X } from 'lucide-vue-next'
 import DataTable from '@/components/ui/DataTable.vue'
@@ -8,6 +8,8 @@ import AppButton from '@/components/ui/AppButton.vue'
 import { downloadFile, http, parseError } from '@/api/http'
 import { useUiStore } from '@/stores/ui'
 import TableCell from './TableCell.vue'
+import RowCards from './RowCards.vue'
+import { TABLE_LAYOUT } from '@/composables/useTableConfig'
 
 /**
  * The one table every list page uses: renders columns from the server-side config, and (with `bulk`)
@@ -38,6 +40,9 @@ const props = defineProps({
   bulk: { type: Object, default: null },
 })
 const emit = defineEmits(['row-click', 'sort', 'changed'])
+const layout = inject(TABLE_LAYOUT, ref('table'))
+/** Keys of extra (non-config) columns such as row actions: shown at the bottom of each card. */
+const actionKeys = computed(() => props.extraColumns.map((c) => c.key))
 const slots = useSlots()
 const ui = useUiStore()
 
@@ -207,7 +212,27 @@ onClickOutside(exportMenu, () => (exportOpen.value = false))
       </template>
     </div>
 
+    <RowCards
+      v-if="layout === 'cards'"
+      v-model:selected="selected"
+      :columns="columns"
+      :rows="rows"
+      :loading="loading"
+      :selectable="canSelect"
+      :clickable="clickable"
+      @row-click="(r) => emit('row-click', r)"
+    >
+      <template #cell="{ row, col, index, size }">
+        <slot v-if="col.is_builtin && $slots[`cell-${col.key}`]" :name="`cell-${col.key}`" :row="row" :col="col" :index="index" />
+        <TableCell v-else :col="col" :row="row" :index="index" :offset="offset" :editable="editableValues" :save="saveValue" :media-size="size" />
+      </template>
+      <template v-if="actionKeys.some((k) => $slots[`cell-${k}`])" #actions="{ row }">
+        <template v-for="k in actionKeys" :key="k"><slot :name="`cell-${k}`" :row="row" /></template>
+      </template>
+      <template v-if="$slots.empty" #empty><slot name="empty" /></template>
+    </RowCards>
     <DataTable
+      v-else
       v-model:selected="selected"
       :columns="tableColumns"
       :rows="rows"
