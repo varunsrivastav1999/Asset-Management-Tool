@@ -6,6 +6,8 @@ import AppBadge from '@/components/ui/AppBadge.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
 import UserAvatar from '@/components/ui/UserAvatar.vue'
 import EntityPicker from '@/components/ui/EntityPicker.vue'
+import MediaValue from '@/components/table/MediaValue.vue'
+import MediaInput from '@/components/table/MediaInput.vue'
 import { pick, userLabel, userSub } from '@/api/pickers'
 import { parseError } from '@/api/http'
 import { useUiStore } from '@/stores/ui'
@@ -59,7 +61,8 @@ onClickOutside(box, () => editing.value && !saving.value && (editing.value = fal
 async function start() {
   if (!props.editable || !isCustom.value) return
   const v = raw.value
-  draft.value = props.col.type === 'user' ? (v && typeof v === 'object' ? v.id : null) : props.col.type === 'boolean' ? (v === true ? 'true' : v === false ? 'false' : '') : (v ?? '')
+  if (props.col.type === 'media') draft.value = v && typeof v === 'object' ? v : null
+  else draft.value = props.col.type === 'user' ? (v && typeof v === 'object' ? v.id : null) : props.col.type === 'boolean' ? (v === true ? 'true' : v === false ? 'false' : '') : (v ?? '')
   editing.value = true
   await nextTick()
   box.value?.querySelector('input, select')?.focus()
@@ -83,7 +86,15 @@ async function commit() {
 
 <template>
   <div v-if="editing" ref="box" class="flex min-w-[10rem] items-center gap-1" @click.stop>
-    <select v-if="hasOptions(col.type)" v-model="draft" class="field !py-1 text-xs" @keydown.enter="commit" @keydown.esc="editing = false">
+    <MediaInput
+      v-if="col.type === 'media'"
+      :model-value="draft"
+      :item="col.item"
+      :column="col.key"
+      class="min-w-[14rem]"
+      @update:model-value="(v) => ((draft = v), commit())"
+    />
+    <select v-else-if="hasOptions(col.type)" v-model="draft" class="field !py-1 text-xs" @keydown.enter="commit" @keydown.esc="editing = false">
       <option value="">—</option>
       <option v-for="o in options" :key="o" :value="o">{{ o }}</option>
     </select>
@@ -103,7 +114,7 @@ async function commit() {
       @keydown.enter="commit"
       @keydown.esc="editing = false"
     />
-    <button type="button" class="rounded-md p-1 text-success hover:bg-success/10" :disabled="saving" aria-label="Save" @click="commit"><Check class="h-3.5 w-3.5" /></button>
+    <button v-if="col.type !== 'media'" type="button" class="rounded-md p-1 text-success hover:bg-success/10" :disabled="saving" aria-label="Save" @click="commit"><Check class="h-3.5 w-3.5" /></button>
     <button type="button" class="rounded-md p-1 text-muted hover:bg-surface-hover" aria-label="Cancel" @click="editing = false"><X class="h-3.5 w-3.5" /></button>
   </div>
 
@@ -120,6 +131,7 @@ async function commit() {
       </template>
       <span v-else class="text-muted">{{ row.department_name && col.key === 'assigned_to' ? row.department_name : '—' }}</span>
     </span>
+    <MediaValue v-else-if="col.type === 'media'" :value="raw" class="min-w-0" />
     <a v-else-if="col.type === 'file' && raw" :href="raw" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-sm text-accent hover:underline" @click.stop><FileText class="h-3.5 w-3.5" /> Open</a>
     <span v-else-if="col.type === 'date'" class="text-sm whitespace-nowrap">
       {{ display }}

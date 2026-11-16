@@ -8,9 +8,11 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from rest_framework.exceptions import ValidationError
+
+from apps.core.spreadsheets import read_rows as _read_rows
 
 from .models import Asset, AssetEvent, Category, Location, Vendor
 from .services import clean_custom_data, log_event
@@ -133,37 +135,6 @@ def template_xlsx() -> bytes:
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
-
-
-def _read_rows(upload) -> list[dict]:
-    name = (upload.name or "").lower()
-    if upload.size > 5 * 1024 * 1024:
-        raise ValidationError({"file": "File exceeds 5 MB."})
-    if name.endswith(".csv"):
-        text = upload.read().decode("utf-8-sig", errors="replace")
-        reader = csv.DictReader(io.StringIO(text))
-        rows = [{(k or "").strip(): (v or "").strip() for k, v in r.items()} for r in reader]
-    elif name.endswith(".xlsx"):
-        try:
-            wb = load_workbook(upload, read_only=True, data_only=True)
-        except Exception as exc:  # noqa: BLE001
-            raise ValidationError({"file": "Could not read the Excel file."}) from exc
-        ws = wb.active
-        it = ws.iter_rows(values_only=True)
-        try:
-            header = [str(h).strip() if h is not None else "" for h in next(it)]
-        except StopIteration:
-            return []
-        rows = []
-        for values in it:
-            if values is None or all(v in (None, "") for v in values):
-                continue
-            rows.append({header[i]: v for i, v in enumerate(values) if i < len(header) and header[i]})
-    else:
-        raise ValidationError({"file": "Upload a .csv or .xlsx file."})
-    if len(rows) > settings.MAX_IMPORT_ROWS:
-        raise ValidationError({"file": f"At most {settings.MAX_IMPORT_ROWS} rows per import."})
-    return rows
 
 
 def _text(v) -> str:

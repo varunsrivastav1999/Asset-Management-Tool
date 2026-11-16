@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import SidebarItem, TableColumn, TableDefinition, TablePreference, TableRecord
+from .models import SidebarItem, TableColumn, TableDefinition, TableMedia, TablePreference, TableRecord
 
 
 class TableColumnInline(admin.TabularInline):
@@ -43,3 +43,11 @@ class TableDefinitionAdmin(admin.ModelAdmin):
 class TableRecordAdmin(admin.ModelAdmin):
     list_display = ("id", "definition", "is_archived", "archived_from", "created_at")
     list_filter = ("is_archived", "definition")
+
+
+@admin.register(TableMedia)
+class TableMediaAdmin(admin.ModelAdmin):
+    list_display = ["name", "sidebar_item", "column_key", "content_type", "size", "uploaded_by", "created_at"]
+    list_filter = ["content_type"]
+    search_fields = ["name", "column_key"]
+    readonly_fields = ["id", "file", "content_type", "size", "uploaded_by", "created_at"]

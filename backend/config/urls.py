@@ -13,6 +13,7 @@ from apps.dashboard.views import stats
 from apps.maintenance.views import MaintenanceViewSet
 from apps.navigation.column_views import TableColumnViewSet, table_columns, table_prefs, tables
 from apps.navigation.definition_views import TableDefinitionViewSet, TableRecordViewSet
+from apps.navigation.media_views import TableMediaFileView, TableMediaUploadView
 from apps.navigation.views import SidebarItemViewSet, sidebar
 from apps.notifications.views import NotificationViewSet
 from apps.workflows.views import GoodsReceiptViewSet, HandoverViewSet
@@ -49,6 +50,8 @@ api = [
     path("reminders/", include("apps.reminders.urls")),
     path("tables/", tables, name="tables"),
     path("tables/prefs/", table_prefs, name="table-prefs"),
+    path("table-media/", TableMediaUploadView.as_view(), name="table-media"),
+    path("table-media/<uuid:pk>/", TableMediaFileView.as_view(), name="table-media-file"),
     path("tables/<slug:table>/columns/", table_columns, name="table-columns-config"),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),

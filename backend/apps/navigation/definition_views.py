@@ -3,10 +3,13 @@
 import re
 
 from django.db import transaction
+from django.http import HttpResponse
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import SAFE_METHODS, IsAuthenticated
 from rest_framework.response import Response
 
@@ -16,6 +19,7 @@ from apps.core.exceptions import DomainError
 from apps.core.permissions import IsAdmin, IsManager, ReadAnyWriteAdmin, is_admin, is_manager
 from apps.core.roles import effective_role, validate_roles
 
+from . import record_import
 from .definitions import unique_slug
 from .models import SidebarItem, TableColumn, TableDefinition, TableRecord
 from .serializers import ICON_RE
@@ -205,7 +209,7 @@ class TableDefinitionViewSet(AuditedViewSetMixin, viewsets.ModelViewSet):
                 order=i,
                 is_required=i == 1,
                 is_searchable=c["type"] in ("text", "select", "status", "user"),
-                is_sortable=c["type"] != "file",
+                is_sortable=c["type"] not in ("file", "media"),
             )
         for j, key in enumerate(("created_at", "updated_at")):
             TableColumn.objects.filter(sidebar_item=item, key=key).update(order=len(cols) + 1 + j)
@@ -419,3 +423,37 @@ class TableRecordViewSet(ConfigurableTableMixin, viewsets.ModelViewSet):
             changes={"ids": ids, "target": target.pk},
         )
         return Response({"moved": n, "target": target.name})
+
+    @extend_schema(responses={200: OpenApiTypes.BINARY})
+    @action(detail=False, methods=["get"], url_path="import-template", permission_classes=[IsManager])
+    def import_template(self, request):
+        item = self.table_item()
+        response = HttpResponse(record_import.template_csv(item), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{item.definition.slug}-import-template.csv"'
+        return response
+
+    @extend_schema(request={"multipart/form-data": OpenApiTypes.OBJECT}, responses={200: dict})
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="import",
+        permission_classes=[IsManager],
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def import_rows(self, request):
+        """CSV / Excel import into this custom table; all-or-nothing, `dry_run` only validates."""
+        item = self.table_item()
+        upload = request.FILES.get("file")
+        if upload is None:
+            raise DomainError("Attach a .csv or .xlsx file.", field="file")
+        dry_run = str(request.data.get("dry_run", "false")).lower() in ("1", "true", "yes")
+        report = record_import.import_records(item, upload, request.user, dry_run=dry_run)
+        if not dry_run and not report["errors"]:
+            record(
+                AuditLog.Action.IMPORT,
+                request.user,
+                model="navigation.tablerecord",
+                object_repr=f"Imported {report['created']} row(s) into {item.definition.name}",
+                changes={"file": upload.name, "created": report["created"]},
+            )
+        return Response(report, status=status.HTTP_400_BAD_REQUEST if report["errors"] else status.HTTP_200_OK)

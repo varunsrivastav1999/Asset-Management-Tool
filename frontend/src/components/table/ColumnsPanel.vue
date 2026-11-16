@@ -91,7 +91,7 @@ async function add() {
       type: newCol.type,
       options: parseOptions(newCol.type, newCol.options),
       is_searchable: ['text', 'select', 'status', 'user'].includes(newCol.type),
-      is_sortable: newCol.type !== 'file',
+      is_sortable: !['file', 'media'].includes(newCol.type),
     })
     ui.success('Column added')
     Object.assign(newCol, { name: '', type: 'text', options: '' })

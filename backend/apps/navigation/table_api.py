@@ -13,6 +13,7 @@ import csv
 import datetime
 import decimal
 import io
+import uuid
 
 from django.db import transaction
 from django.db.models import F, ProtectedError, Q
@@ -86,11 +87,13 @@ def effective_columns(item: SidebarItem | None, table_key: str, user) -> list[di
 
 class ColumnSerializer(serializers.ModelSerializer):
     type = serializers.CharField(source="column_type", read_only=True)
+    item = serializers.IntegerField(source="sidebar_item_id", read_only=True)  # page the column belongs to (uploads)
 
     class Meta:
         model = TableColumn
         fields = [
             "id",
+            "item",
             "key",
             "name",
             "type",
@@ -127,6 +130,24 @@ def clean_options(kind: str, options) -> list[str]:
     return cleaned
 
 
+def _media_value(col: TableColumn, value) -> dict:
+    """A Media cell holds a reference to a file uploaded for this column (never an arbitrary URL)."""
+    from .models import TableMedia
+
+    media_id = value.get("id") if isinstance(value, dict) else value
+    media_id = uuid.UUID(str(media_id)) if media_id else None  # ValueError -> "Invalid value"
+    media = (
+        TableMedia.objects.filter(pk=str(media_id), column_key=col.key, sidebar_item__table=col.sidebar_item.table)
+        .only("id", "name", "content_type", "size")
+        .first()
+        if media_id
+        else None
+    )
+    if media is None:
+        raise ValueError
+    return media.as_value()
+
+
 def coerce_value(col: TableColumn, value):
     """Validate a custom column value for storage in custom_data."""
     if value in (None, ""):
@@ -157,6 +178,8 @@ def coerce_value(col: TableColumn, value):
             if isinstance(value, dict) and "id" in value:
                 return {"id": int(value["id"]), "name": str(value.get("name", ""))[:160]}
             raise ValueError
+        if col.column_type == t.MEDIA:
+            return _media_value(col, value)
         if col.column_type == t.FILE:
             s = str(value).strip()
             if not s.lower().startswith(("https://", "http://", "/media/")):

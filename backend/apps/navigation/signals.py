@@ -4,7 +4,7 @@ from django.dispatch import receiver
 
 from apps.notifications.services import broadcast_all
 
-from .models import SidebarItem, TableColumn
+from .models import SidebarItem, TableColumn, TableMedia
 
 
 def broadcast_sidebar_change():
@@ -30,3 +30,10 @@ def broadcast_columns_change(item_id):
 @receiver(post_delete, sender=TableColumn, dispatch_uid="column-delete")
 def _column_changed(sender, instance, **kwargs):
     broadcast_columns_change(instance.sidebar_item_id)
+
+
+@receiver(post_delete, sender=TableMedia, dispatch_uid="table-media-file")
+def _delete_media_file(sender, instance, **kwargs):
+    """Remove the stored file with its record (also when a page and its uploads are deleted)."""
+    if instance.file:
+        transaction.on_commit(lambda: instance.file.delete(save=False))

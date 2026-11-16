@@ -56,6 +56,12 @@ Everything day-to-day (users, departments, categories and custom fields, locatio
 - Columns are attached to a **sidebar page**, so two menu entries for the same table (say `/assets` and `/assets?status=in_repair` "Repairs") can have different columns.
 - The API returns the column config with the rows (`?with_columns=1&table_item=<id>`); `?search=`, `?ordering=<key>` and `?cf.<key>=` follow the config, and `…/export-table/?file_format=csv|xlsx` exports exactly the columns the user sees, in order, with their labels.
 
+### Import and media in tables
+
+- **Import (every custom table):** managers and admins click **Import** on the table page, download the CSV template (one column per table column), fill it in Excel or any spreadsheet, then **Validate** and **Import**. Headers may be column names or keys. People are matched by email or full name, and dates, numbers, Yes/No, select and status values are checked exactly as when typing them in. The whole file is all-or-nothing: if any row fails, nothing is saved and every problem is listed by row. Unknown columns are reported and ignored. Up to 5 MB / 5,000 rows (`MAX_IMPORT_ROWS`). Assets keep their own importer (**Assets → Import**, with `cf:key` columns for category fields).
+- **Media columns:** in **Columns → Add column**, choose **Media (photo / file upload)**. Cells then take an uploaded photo (JPG, PNG, WEBP, GIF), PDF, Office file (DOCX/XLSX/PPTX), CSV/TXT or MP4, up to `MAX_MEDIA_UPLOAD_MB` (15 MB). Photos show as thumbnails; click to open, or use **Replace** and **Remove** when editing. Media columns work on custom and built-in tables (for example a "Photo" column on Assets).
+- Uploads are stored privately (never as public links) and checked by content, not just by extension. Only people who can see the page can open them. Files no cell refers to any more are removed daily, and deleting a table removes its uploads. Exports list the file name.
+
 ### Reminders in practice
 
 - Open **Reminders** in the menu, or the bell button in any section's page header, which opens the rules already filtered to that section.

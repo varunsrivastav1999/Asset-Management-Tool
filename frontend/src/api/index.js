@@ -120,6 +120,12 @@ export const recordsApi = {
   remove: (item, id) => unwrap(http.delete(`/records/${id}/`, { params: { table_item: item } })),
   archive: (item, body) => unwrap(http.post('/records/bulk-archive/', body, { params: { table_item: item } })),
   move: (item, body) => unwrap(http.post('/records/bulk-move/', body, { params: { table_item: item } })),
+  importFile: (item, file, dryRun) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('dry_run', dryRun ? 'true' : 'false')
+    return unwrap(http.post('/records/import/', form, { params: { table_item: item }, timeout: 120000 }))
+  },
 }
 
 export const remindersApi = {
@@ -148,4 +154,16 @@ export const backupsApi = {
   status: () => unwrap(http.get('/backups/')),
   create: () => unwrap(http.post('/backups/')),
   remove: (name) => unwrap(http.delete(`/backups/${encodeURIComponent(name)}/`)),
+}
+
+export const mediaApi = {
+  /** Upload a file for a Media column; resolves to the cell value { id, name, type, size }. */
+  upload: (item, column, file) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('table_item', item)
+    form.append('column', column)
+    return unwrap(http.post('/table-media/', form, { timeout: 120000 }))
+  },
+  url: (id) => `/table-media/${id}/`,
 }

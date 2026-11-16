@@ -8,6 +8,7 @@ export const COLUMN_TYPES = [
   { value: 'status', label: 'Status' },
   { value: 'user', label: 'User' },
   { value: 'file', label: 'File / link' },
+  { value: 'media', label: 'Media (photo / file upload)' },
 ]
 
 export const COLUMN_TYPE_LABEL = { ...Object.fromEntries(COLUMN_TYPES.map((t) => [t.value, t.label])), auto_number: 'Auto number' }

@@ -144,6 +144,7 @@ STORAGES = {
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 15 * 1024 * 1024
 MAX_IMAGE_UPLOAD_MB = env.int("MAX_IMAGE_UPLOAD_MB", default=10)
+MAX_MEDIA_UPLOAD_MB = env.int("MAX_MEDIA_UPLOAD_MB", default=15)  # Media columns (nginx allows 20 MB bodies)
 MAX_IMPORT_ROWS = env.int("MAX_IMPORT_ROWS", default=5000)
 
 # --- Redis: broker (db0), cache (db1), channels (db2) -----------------------
@@ -266,6 +267,10 @@ CELERY_BEAT_SCHEDULE = {
     "scan-reminder-rules": {
         "task": "apps.reminders.tasks.scan_reminder_rules",
         "schedule": crontab(minute="*/5"),
+    },
+    "purge-orphan-table-media": {
+        "task": "apps.navigation.tasks.purge_orphan_table_media",
+        "schedule": crontab(hour=3, minute=40),
     },
     "purge-reminder-files": {
         "task": "apps.reminders.tasks.purge_reminder_files",

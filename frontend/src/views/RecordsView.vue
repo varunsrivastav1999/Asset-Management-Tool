@@ -3,7 +3,7 @@ import { inSentence } from '@/utils/format'
 import ReminderButton from '@/components/reminders/ReminderButton.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Archive, ArchiveRestore, Columns3, MoveRight, Pencil, Plus, Table2, Trash2 } from 'lucide-vue-next'
+import { Archive, ArchiveRestore, Columns3, MoveRight, Pencil, Plus, Table2, Trash2, Upload } from 'lucide-vue-next'
 import { definitionsApi, recordsApi } from '@/api'
 import { parseError } from '@/api/http'
 import { useList } from '@/composables/useList'
@@ -22,6 +22,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import ConfigurableTable from '@/components/table/ConfigurableTable.vue'
 import ColumnsPanel from '@/components/table/ColumnsPanel.vue'
 import RecordForm from '@/components/table/RecordForm.vue'
+import ImportDialog from '@/components/ui/ImportDialog.vue'
 
 /** Generic page for admin-created tables (/t/<slug>). */
 const route = useRoute()
@@ -56,6 +57,7 @@ watch(view, () => list.load())
 watch(() => list.error.value, (e) => e && /not found/i.test(e) && (notFound.value = true))
 
 const columnsOpen = ref(false)
+const importOpen = ref(false)
 const sortBy = (key) => (list.filters.ordering = list.filters.ordering === key ? `-${key}` : key)
 
 // --- create / edit ---
@@ -166,6 +168,7 @@ const bulkConfig = computed(() => ({
         <template #actions>
           <ReminderButton :section="cfg.pageItemId.value" />
           <AppButton variant="secondary" :icon="Columns3" @click="columnsOpen = true">Columns</AppButton>
+          <AppButton v-if="auth.isManager" variant="secondary" :icon="Upload" @click="importOpen = true">Import</AppButton>
           <AppButton v-if="auth.isManager" :icon="Plus" @click="openForm()">Add {{ names.singular }}</AppButton>
         </template>
       </PageHeader>
@@ -217,6 +220,18 @@ const bulkConfig = computed(() => ({
 
       <RecordForm v-model:open="formOpen" :columns="dataColumns" :record="editing" :title="`${editing ? 'Edit' : 'Add'} ${inSentence(names.singular)}`" :saving="saving" :errors="errors" @save="save" />
       <ColumnsPanel v-model:open="columnsOpen" :cfg="cfg" :title="`${names.plural} columns`" />
+      <ImportDialog
+        v-if="auth.isManager"
+        v-model:open="importOpen"
+        :title="`Import ${inSentence(names.plural)}`"
+        :noun="inSentence(names.plural)"
+        template-url="/records/import-template/"
+        :template-params="{ table_item: itemId }"
+        :import-fn="(file, dryRun) => recordsApi.importFile(itemId, file, dryRun)"
+        @imported="list.load()"
+      >
+        <template #hint>Column names (or keys) in the first row are matched to this table. People can be given by email or full name; Yes/No, dates (YYYY-MM-DD) and status values are checked.</template>
+      </ImportDialog>
       <AppModal v-model:open="moveOpen" title="Move to another table" size="sm">
         <AppSelect v-model="moveTarget" label="Target table" placeholder="Choose a table" :options="targets.map((t) => ({ value: t.id, label: t.name }))" />
         <p class="mt-2 text-xs text-muted">Values are matched by column key; columns the target doesn't have are kept but hidden.</p>

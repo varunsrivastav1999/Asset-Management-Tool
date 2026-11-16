@@ -6,6 +6,7 @@ import AppButton from '@/components/ui/AppButton.vue'
 import AppInput from '@/components/ui/AppInput.vue'
 import AppSelect from '@/components/ui/AppSelect.vue'
 import EntityPicker from '@/components/ui/EntityPicker.vue'
+import MediaInput from '@/components/table/MediaInput.vue'
 import { pick, userLabel, userSub } from '@/api/pickers'
 
 /** Create/edit form generated from a table's custom columns. Emits `save` with a custom_data object. */
@@ -20,7 +21,8 @@ watch(open, (v) => {
   Object.keys(form).forEach((k) => delete form[k])
   for (const c of props.columns) {
     const val = props.record?.custom_data?.[c.key]
-    form[c.key] = c.type === 'user' ? (val?.id ?? null) : c.type === 'boolean' ? (val === true ? 'true' : val === false ? 'false' : '') : (val ?? '')
+    if (c.type === 'media') form[c.key] = val && typeof val === 'object' ? val : null
+    else form[c.key] = c.type === 'user' ? (val?.id ?? null) : c.type === 'boolean' ? (val === true ? 'true' : val === false ? 'false' : '') : (val ?? '')
     if (c.type === 'user' && val) users.value[c.key] = { id: val.id, full_name: val.name }
   }
 })
@@ -42,7 +44,8 @@ function submit() {
   <AppModal v-model:open="open" :title="title" size="lg">
     <form id="record-form" class="grid gap-4 sm:grid-cols-2" novalidate @submit.prevent="submit">
       <template v-for="c in columns" :key="c.key">
-        <AppSelect v-if="hasOptions(c.type)" v-model="form[c.key]" :label="c.name" :required="c.is_required" placeholder="—" :options="c.options.map((o) => ({ value: o, label: o }))" :error="errors[c.key]" />
+        <MediaInput v-if="c.type === 'media'" v-model="form[c.key]" class="sm:col-span-2" :item="c.item" :column="c.key" :label="c.name" :error="errors[c.key]" />
+        <AppSelect v-else-if="hasOptions(c.type)" v-model="form[c.key]" :label="c.name" :required="c.is_required" placeholder="—" :options="c.options.map((o) => ({ value: o, label: o }))" :error="errors[c.key]" />
         <AppSelect v-else-if="c.type === 'boolean'" v-model="form[c.key]" :label="c.name" :required="c.is_required" placeholder="—" :options="[{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]" :error="errors[c.key]" />
         <EntityPicker v-else-if="c.type === 'user'" v-model="form[c.key]" :label="c.name" :required="c.is_required" :fetcher="pick.users" :label-of="userLabel" :sublabel-of="userSub" :initial="users[c.key] ? [users[c.key]] : []" :error="errors[c.key]" @select="(u) => (users[c.key] = u)" />
         <AppInput

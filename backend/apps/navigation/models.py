@@ -1,8 +1,11 @@
+import uuid
+
 from django.conf import settings
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models.functions import Lower
 
+from apps.core.files import private_storage, upload_to
 from apps.core.models import TimeStampedModel
 from apps.core.roles import default_roles
 
@@ -57,6 +60,7 @@ class TableColumn(TimeStampedModel):
         USER = "user", "User"
         STATUS = "status", "Status"
         FILE = "file", "File / link"
+        MEDIA = "media", "Media (photo / file upload)"
 
     sidebar_item = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="columns")
     name = models.CharField(max_length=60, help_text="Header label")
@@ -135,3 +139,37 @@ class TableRecord(TimeStampedModel):
 
     def __str__(self):
         return f"Record {self.pk}"
+
+
+def table_media_path(instance, filename):
+    return upload_to("table-media")(instance, filename)
+
+
+class TableMedia(models.Model):
+    """A photo or file uploaded into a Media column. Stored privately; served only to people who can see the page.
+
+    The cell itself stores {"id", "name", "type", "size"}; files no cell points to are purged daily.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sidebar_item = models.ForeignKey(SidebarItem, on_delete=models.CASCADE, related_name="media")
+    column_key = models.CharField(max_length=64)
+    file = models.FileField(upload_to=table_media_path, storage=private_storage, max_length=255)
+    name = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100)
+    size = models.PositiveIntegerField()
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["sidebar_item", "column_key"])]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def is_image(self) -> bool:
+        return self.content_type.startswith("image/")
+
+    def as_value(self) -> dict:
+        return {"id": str(self.id), "name": self.name, "type": self.content_type, "size": self.size}
