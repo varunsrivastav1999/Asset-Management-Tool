@@ -146,6 +146,7 @@ PRIVATE_MEDIA_ROOT = env("PRIVATE_MEDIA_ROOT", default=str(BASE_DIR / "private_m
 BACKUP_DIR = env("BACKUP_DIR", default=str(BASE_DIR / "backups"))
 BACKUP_TIME = env("BACKUP_TIME", default="02:00")
 BACKUP_KEEP = env.int("BACKUP_KEEP", default=7)
+BACKUP_UPLOAD_MAX_MB = env.int("BACKUP_UPLOAD_MAX_MB", default=1024)  # nginx allows the same on /api/backups/upload/
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},

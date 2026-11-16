@@ -67,3 +67,54 @@ def test_unwritable_backup_folder_gives_a_clear_error(admin_client, settings, tm
     settings.BACKUP_DIR = str(blocker)
     res = admin_client.post("/api/backups/")
     assert res.status_code == 503 and "backup service" in res.json()["detail"]
+
+
+# --- Uploads -----------------------------------------------------------------------------------
+def dump_file(name="prod.dump", body=b"PGDMP\x01\x0e\x00 rest of a real dump"):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    return SimpleUploadedFile(name, body, content_type="application/octet-stream")
+
+
+def test_admin_uploads_a_backup_and_can_download_it(admin_client, backup_dir):
+    res = admin_client.post("/api/backups/upload/", {"file": dump_file()})
+    assert res.status_code == 201, res.data
+    name = res.data["name"]
+    assert name.startswith("uploaded-") and name.endswith(".dump") and res.data["kind"] == "uploaded"
+    assert (backup_dir / name).read_bytes().startswith(b"PGDMP")
+    assert not list(backup_dir.glob(".*.part"))  # written atomically, no leftovers
+    listed = [b["name"] for b in admin_client.get("/api/backups/").json()["backups"]]
+    assert name in listed
+    assert b"".join(admin_client.get(f"/api/backups/{name}/").streaming_content).startswith(b"PGDMP")
+    assert AuditLog.objects.filter(model="core.backup", object_repr__startswith="Uploaded backup").exists()
+
+
+def test_two_uploads_in_the_same_second_get_different_names(admin_client, backup_dir):
+    a = admin_client.post("/api/backups/upload/", {"file": dump_file()}).data["name"]
+    b = admin_client.post("/api/backups/upload/", {"file": dump_file()}).data["name"]
+    assert a != b
+
+
+@pytest.mark.parametrize(
+    ("name", "body"),
+    [
+        ("notes.dump", b"just text, not a dump"),  # wrong content
+        ("backup.sql", b"PGDMP but wrong extension"),
+        ("../../etc/passwd.dump", b"nope"),
+    ],
+)
+def test_upload_rejects_anything_but_a_pg_dump(admin_client, backup_dir, name, body):
+    res = admin_client.post("/api/backups/upload/", {"file": dump_file(name, body)})
+    assert res.status_code == 400
+    assert not [p for p in backup_dir.iterdir() if p.name.startswith("uploaded-")]
+
+
+def test_upload_size_limit(admin_client, backup_dir, settings):
+    settings.BACKUP_UPLOAD_MAX_MB = 0
+    assert admin_client.post("/api/backups/upload/", {"file": dump_file()}).status_code == 400
+
+
+def test_upload_is_admin_only(manager_client, employee_client, anon_client, backup_dir):
+    for c in (manager_client, employee_client):
+        assert c.post("/api/backups/upload/", {"file": dump_file()}).status_code == 403
+    assert anon_client.post("/api/backups/upload/", {"file": dump_file()}).status_code == 401

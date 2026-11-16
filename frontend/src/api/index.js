@@ -161,6 +161,17 @@ export const backupsApi = {
   status: () => unwrap(http.get('/backups/')),
   create: () => unwrap(http.post('/backups/')),
   remove: (name) => unwrap(http.delete(`/backups/${encodeURIComponent(name)}/`)),
+  /** Upload a .dump file; onProgress(0..100). Large files stream, so no client-side timeout. */
+  upload: (file, onProgress) => {
+    const form = new FormData()
+    form.append('file', file)
+    return unwrap(
+      http.post('/backups/upload/', form, {
+        timeout: 0,
+        onUploadProgress: (e) => e.total && onProgress?.(Math.round((e.loaded / e.total) * 100)),
+      }),
+    )
+  },
 }
 
 export const mediaApi = {

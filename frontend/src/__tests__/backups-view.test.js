@@ -5,8 +5,9 @@ import { createPinia, setActivePinia } from 'pinia'
 const status = vi.fn()
 const create = vi.fn()
 const remove = vi.fn()
+const upload = vi.fn()
 const downloadFile = vi.fn(async () => {})
-vi.mock('@/api', () => ({ backupsApi: { status: (...a) => status(...a), create: (...a) => create(...a), remove: (...a) => remove(...a) } }))
+vi.mock('@/api', () => ({ backupsApi: { status: (...a) => status(...a), create: (...a) => create(...a), remove: (...a) => remove(...a), upload: (...a) => upload(...a) } }))
 vi.mock('@/api/http', () => ({ downloadFile: (...a) => downloadFile(...a), parseError: (e) => ({ message: e?.message || 'failed' }) }))
 
 import BackupsView from '@/views/settings/BackupsView.vue'
@@ -23,7 +24,7 @@ const mountView = (comp) => {
 }
 beforeEach(() => {
   setActivePinia(createPinia())
-  ;[status, create, remove, downloadFile].forEach((f) => f.mockReset())
+  ;[status, create, remove, upload, downloadFile].forEach((f) => f.mockReset())
 })
 afterEach(() => {
   wrappers.forEach((w) => w.unmount())
@@ -67,5 +68,45 @@ describe('BackupsView', () => {
     await flushPromises()
     expect(remove).toHaveBeenCalledWith('manual-20261116-101500.dump')
     expect(status).toHaveBeenCalledTimes(2)
+  })
+
+  it('uploads a .dump with progress, then lists it', async () => {
+    status.mockResolvedValue({ ...base, backups: [] })
+    upload.mockImplementation(async (file, onProgress) => {
+      onProgress(55)
+      return { name: 'uploaded-20261116-120000.dump', kind: 'uploaded', size: 10, created_at: '2026-11-16T12:00:00Z' }
+    })
+    const w = mountView(BackupsView)
+    await flushPromises()
+    const input = w.find('[data-testid="backup-file"]')
+    Object.defineProperty(input.element, 'files', { value: [new File(['PGDMP'], 'prod.dump')], configurable: true })
+    await input.trigger('change')
+    await flushPromises()
+    expect(upload).toHaveBeenCalledWith(expect.any(File), expect.any(Function))
+    expect(status).toHaveBeenCalledTimes(2) // refreshed after upload
+  })
+
+  it('refuses non-.dump files before uploading', async () => {
+    status.mockResolvedValue({ ...base, backups: [] })
+    const w = mountView(BackupsView)
+    await flushPromises()
+    const input = w.find('[data-testid="backup-file"]')
+    Object.defineProperty(input.element, 'files', { value: [new File(['x'], 'data.sql')], configurable: true })
+    await input.trigger('change')
+    await flushPromises()
+    expect(upload).not.toHaveBeenCalled()
+  })
+
+  it('shows the exact restore steps for a backup', async () => {
+    status.mockResolvedValue({ ...base, backups: [{ ...files[0], name: 'uploaded-20261116-120000.dump', kind: 'uploaded' }] })
+    const w = mountView(BackupsView)
+    await flushPromises()
+    expect(w.text()).toContain('Uploaded')
+    await w.find('[aria-label="Restore uploaded-20261116-120000.dump"]').trigger('click')
+    await flushPromises()
+    const steps = document.body.querySelector('[data-testid="restore-steps"]').textContent
+    expect(steps).toContain('docker compose stop api worker beat')
+    expect(steps).toContain('docker compose run --rm backup restore uploaded-20261116-120000.dump')
+    expect(steps).toContain('docker compose start api worker beat')
   })
 })

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { DatabaseBackup, Download, HardDrive, RefreshCw, Trash2 } from 'lucide-vue-next'
+import { Copy, DatabaseBackup, Download, HardDrive, RefreshCw, RotateCcw, Trash2, Upload } from 'lucide-vue-next'
 import { backupsApi } from '@/api'
 import { downloadFile, parseError } from '@/api/http'
 import { useUiStore } from '@/stores/ui'
@@ -9,6 +9,7 @@ import AppButton from '@/components/ui/AppButton.vue'
 import AppBadge from '@/components/ui/AppBadge.vue'
 import DataTable from '@/components/ui/DataTable.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import AppModal from '@/components/ui/AppModal.vue'
 import { formatDateTime } from '@/utils/format'
 
 const ui = useUiStore()
@@ -71,6 +72,49 @@ async function remove(b) {
   }
 }
 
+// --- upload ---------------------------------------------------------------------
+const fileInput = ref(null)
+const uploading = ref(false)
+const progress = ref(0)
+async function onPick(e) {
+  const file = e.target.files?.[0]
+  e.target.value = ''
+  if (!file) return
+  if (!file.name.toLowerCase().endsWith('.dump')) return ui.error('Choose a .dump file made by Back up now or the daily backup.')
+  uploading.value = true
+  progress.value = 0
+  try {
+    const saved = await backupsApi.upload(file, (p) => (progress.value = p))
+    ui.success(`Uploaded as ${saved.name}`)
+    load()
+  } catch (err) {
+    ui.error(parseError(err).message)
+  } finally {
+    uploading.value = false
+  }
+}
+
+// --- restore instructions -------------------------------------------------------
+const restoreOf = ref(null)
+const restoreSteps = computed(() => {
+  const name = restoreOf.value?.name || ''
+  return [
+    { label: 'Stop the app (the database must not be in use)', cmd: 'docker compose stop api worker beat' },
+    { label: 'Restore this backup (replaces all current data)', cmd: `docker compose run --rm backup restore ${name}` },
+    { label: 'Start the app again', cmd: 'docker compose start api worker beat' },
+  ]
+})
+async function copy(text) {
+  try {
+    await navigator.clipboard.writeText(text)
+    ui.success('Copied')
+  } catch {
+    ui.warning(text)
+  }
+}
+
+const KIND = { manual: { label: 'Manual', tone: 'violet' }, uploaded: { label: 'Uploaded', tone: 'amber' }, auto: { label: 'Daily', tone: 'slate' } }
+
 function size(bytes) {
   if (bytes < 1024) return `${bytes} B`
   const units = ['KB', 'MB', 'GB']
@@ -95,6 +139,8 @@ const columns = [
     <PageHeader title="Backups" subtitle="Database backups made automatically every day and whenever you need one.">
       <template #actions>
         <AppButton variant="secondary" :icon="RefreshCw" aria-label="Refresh" @click="load" />
+        <AppButton variant="secondary" :icon="Upload" :loading="uploading" @click="fileInput.click()">{{ uploading ? `Uploading ${progress}%` : 'Upload backup' }}</AppButton>
+        <input ref="fileInput" type="file" accept=".dump" class="hidden" data-testid="backup-file" @change="onPick" />
         <AppButton :icon="DatabaseBackup" :loading="requesting || !!state?.pending" @click="backupNow">{{ state?.pending ? 'Backing up…' : 'Back up now' }}</AppButton>
       </template>
     </PageHeader>
@@ -127,10 +173,11 @@ const columns = [
             <p class="truncate font-mono text-xs text-muted">{{ row.name }}</p>
           </div>
         </template>
-        <template #cell-kind="{ row }"><AppBadge :tone="row.kind === 'manual' ? 'violet' : 'slate'">{{ row.kind === 'manual' ? 'Manual' : 'Daily' }}</AppBadge></template>
+        <template #cell-kind="{ row }"><AppBadge :tone="(KIND[row.kind] || KIND.auto).tone">{{ (KIND[row.kind] || KIND.auto).label }}</AppBadge></template>
         <template #cell-size="{ row }"><span class="tabular-nums">{{ size(row.size) }}</span></template>
         <template #cell-actions="{ row }">
           <div class="flex justify-end gap-1">
+            <AppButton size="sm" variant="ghost" :icon="RotateCcw" :aria-label="`Restore ${row.name}`" @click.stop="restoreOf = row" />
             <AppButton size="sm" variant="ghost" :icon="Download" :aria-label="`Download ${row.name}`" @click.stop="download(row)" />
             <AppButton size="sm" variant="ghost" :icon="Trash2" :aria-label="`Delete ${row.name}`" @click.stop="remove(row)" />
           </div>
@@ -140,7 +187,26 @@ const columns = [
     </div>
 
     <p class="mt-4 text-xs text-muted">
-      To restore, stop the app and run the restore command shown in the README (“Backups”). Restoring replaces all current data with the backup.
+      Upload a <code>.dump</code> file (from Download, or another installation) to keep it here or restore it. Restoring replaces all current data: use
+      <b>Restore…</b> on a backup for the exact steps.
     </p>
+
+    <AppModal :open="!!restoreOf" :title="`Restore ${restoreOf?.name || ''}`" subtitle="Run these on the server, in the app's folder" size="lg" @update:open="(v) => !v && (restoreOf = null)">
+      <div class="space-y-3" data-testid="restore-steps">
+        <p class="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+          Everything added or changed after {{ restoreOf ? formatDateTime(restoreOf.created_at) : '' }} is lost. Take a <b>Back up now</b> first if you might need today's data.
+        </p>
+        <ol class="space-y-2">
+          <li v-for="(s, i) in restoreSteps" :key="i" class="rounded-2xl border border-line p-3">
+            <p class="mb-1.5 text-xs text-muted">{{ i + 1 }}. {{ s.label }}</p>
+            <div class="flex items-center gap-2">
+              <code class="min-w-0 flex-1 overflow-x-auto rounded-lg bg-surface-hover px-3 py-2 font-mono text-xs whitespace-nowrap">{{ s.cmd }}</code>
+              <AppButton size="sm" variant="ghost" :icon="Copy" :aria-label="`Copy step ${i + 1}`" @click="copy(s.cmd)" />
+            </div>
+          </li>
+        </ol>
+      </div>
+      <template #footer><AppButton variant="secondary" @click="restoreOf = null">Close</AppButton></template>
+    </AppModal>
   </div>
 </template>

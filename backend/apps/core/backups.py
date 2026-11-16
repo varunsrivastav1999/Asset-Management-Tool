@@ -14,7 +14,8 @@ from pathlib import Path
 from django.conf import settings
 from django.utils import timezone
 
-NAME_RE = re.compile(r"^(auto|manual)-\d{8}-\d{6}\.dump$")
+NAME_RE = re.compile(r"^(auto|manual|uploaded)-\d{8}-\d{6}\.dump$")
+PG_DUMP_MAGIC = b"PGDMP"  # first bytes of every pg_dump custom-format file
 HEARTBEAT_MAX_AGE = 60  # seconds without a heartbeat before the service counts as offline
 
 
@@ -80,6 +81,41 @@ def request_backup() -> None:
         (folder / f"{timezone.now():%Y%m%d%H%M%S}-{uuid.uuid4().hex[:8]}").touch()
     except OSError as exc:
         raise BackupStorageError(f"Can't write to the backup folder ({backup_dir()}). Is the backup service running?") from exc
+
+
+def save_upload(upload) -> Backup:
+    """Store an uploaded pg_dump file as `uploaded-<timestamp>.dump` (validated, written atomically)."""
+    from rest_framework.exceptions import ValidationError
+
+    limit_mb = settings.BACKUP_UPLOAD_MAX_MB
+    if not upload.name.lower().endswith(".dump"):
+        raise ValidationError({"file": "Upload a .dump file made by this app's backups (pg_dump custom format)."})
+    if upload.size > limit_mb * 1024 * 1024:
+        raise ValidationError({"file": f"Backup exceeds {limit_mb} MB."})
+    head = upload.read(len(PG_DUMP_MAGIC))
+    upload.seek(0)
+    if head != PG_DUMP_MAGIC:
+        raise ValidationError({"file": "That isn't a database backup (pg_dump custom format)."})
+    folder = backup_dir()
+    stamp = timezone.localtime()
+    for _ in range(60):  # unique name even for several uploads in the same second
+        name = f"uploaded-{stamp:%Y%m%d-%H%M%S}.dump"
+        if not (folder / name).exists():
+            break
+        stamp += datetime.timedelta(seconds=1)
+    target = folder / name
+    partial = folder / f".{name}.part"
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        with partial.open("wb") as out:
+            for chunk in upload.chunks():
+                out.write(chunk)
+        partial.replace(target)  # appears in the list only once complete
+    except OSError as exc:
+        partial.unlink(missing_ok=True)
+        raise BackupStorageError(f"Can't write to the backup folder ({folder}).") from exc
+    stat = target.stat()
+    return Backup(target.name, "uploaded", stat.st_size, datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.UTC))
 
 
 def status() -> dict:

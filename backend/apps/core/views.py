@@ -8,6 +8,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.exceptions import NotFound
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -85,6 +86,30 @@ class BackupsView(APIView):
             return Response({"detail": str(exc), "code": "backup_unavailable"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         record(AuditLog.Action.CREATE, request.user, model="core.backup", object_repr="Manual database backup requested")
         return Response(backups.status(), status=status.HTTP_202_ACCEPTED)
+
+
+class BackupUploadView(APIView):
+    """Admin: upload a backup file (e.g. one downloaded earlier or from another server) so it can be restored."""
+
+    permission_classes = [IsAdmin]
+    parser_classes = [MultiPartParser]
+
+    @extend_schema(request={"multipart/form-data": OpenApiTypes.OBJECT}, responses={201: dict})
+    def post(self, request):
+        upload = request.FILES.get("file")
+        if upload is None:
+            return Response({"detail": "Attach a .dump file.", "code": "invalid"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            saved = backups.save_upload(upload)
+        except backups.BackupStorageError as exc:
+            return Response({"detail": str(exc), "code": "backup_unavailable"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        record(
+            AuditLog.Action.CREATE,
+            request.user,
+            model="core.backup",
+            object_repr=f"Uploaded backup {saved.name} ({upload.name}, {saved.size} bytes)",
+        )
+        return Response(saved.as_dict(), status=status.HTTP_201_CREATED)
 
 
 class BackupFileView(APIView):

@@ -135,6 +135,8 @@ Default sidebar items, dashboard widgets and table columns are created by migrat
 
 - The `backup` service runs Postgres' own `pg_dump` (same version as the database). It backs up the database every day at `BACKUP_TIME` (default 02:00, in `TIME_ZONE`), keeps the newest `BACKUP_KEEP` daily backups (default 7), and takes one immediately on first start.
 - **Settings → Backups** (admins) shows the service status, schedule and every backup. You can **Back up now**, **download** a backup (keep copies off this machine) and delete old ones. Every action is recorded in the audit log.
+- **Upload backup** adds a `.dump` file, one you downloaded earlier or one from another installation, as `uploaded-YYYYMMDD-HHMMSS.dump`, up to `BACKUP_UPLOAD_MAX_MB` (1 GB). Only real `pg_dump` backups are accepted (checked by content), and uploads are kept until you delete them.
+- **Restore…** on any backup shows the three commands for that exact file, with copy buttons. Restoring is done on the server on purpose: the app must be stopped while the database is replaced.
 - Backups are stored in the `backups` Docker volume as `auto-YYYYMMDD-HHMMSS.dump` / `manual-….dump` (compressed `pg_dump` custom format). List them from the terminal:
 
 ```bash
