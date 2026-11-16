@@ -39,3 +39,11 @@ def test_openapi_schema_builds_without_errors_or_warnings(tmp_path):
     from django.core.management import call_command
 
     call_command("spectacular", "--validate", "--fail-on-warn", "--file", str(tmp_path / "schema.yml"))
+
+
+def test_database_uses_a_bounded_connection_pool():
+    """Under ASGI, per-thread persistent connections exhausted Postgres ("too many clients"); the pool bounds them."""
+    from config.settings import base
+
+    db = base.DATABASES["default"]
+    assert db["OPTIONS"]["pool"]["max_size"] <= 8 and db["CONN_MAX_AGE"] == 0

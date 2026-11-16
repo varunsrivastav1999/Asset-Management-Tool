@@ -29,3 +29,7 @@ LOGGING["root"]["level"] = "WARNING"  # noqa: F405
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 SMTP_HOST = "smtp.test"
 EMAIL_HOST = "smtp.test"
+
+# Tests create and flush their own database; no connection pool there.
+DATABASES["default"].get("OPTIONS", {}).pop("pool", None)  # noqa: F405
+DATABASES["default"]["CONN_MAX_AGE"] = 0  # noqa: F405

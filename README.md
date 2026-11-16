@@ -163,6 +163,10 @@ docker compose cp ./manual-20261116-101500.dump backup:/backups/
 
 - Uploaded files (photos, signatures, invoices) live in the `media` and `private_media` volumes; back those up with your usual volume or host backup.
 
+### Updates and installed copies
+
+The app can be installed (PWA) and keeps a cached copy for offline use. After an update it shows **Update available → Reload now**. It checks on start, every 15 minutes, and when you return to the tab, so a long-open or installed copy never keeps running an old version.
+
 ### Using it from phones and other devices
 
 - Every device on the same network can open **https://<this machine's IP>:2025**. No IP needs configuring: any private-network address (192.168.x.x, 10.x.x.x, `*.local` …) is accepted automatically, so it keeps working when the IP changes. QR codes, PDFs and email links use the address the app was opened on (set `FRONTEND_URL` to pin one).

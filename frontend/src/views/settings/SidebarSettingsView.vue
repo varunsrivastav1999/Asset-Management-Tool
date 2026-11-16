@@ -310,7 +310,7 @@ onBeforeRouteLeave(async () => !dirty.value || (await ui.confirm({ title: 'Disca
       </div>
     </Transition>
 
-    <div v-show="tab === 'menu'" class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+    <div v-show="tab === 'menu'" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
       <section class="card min-w-0 p-3 sm:p-4">
         <div v-if="loading" class="space-y-2"><div v-for="i in 8" :key="i" class="skeleton h-12" /></div>
         <EmptyState v-else-if="!tree.length" :icon="PanelLeft" title="The sidebar is empty" message="Add items or restore the default menu.">
@@ -319,7 +319,7 @@ onBeforeRouteLeave(async () => !dirty.value || (await ui.confirm({ title: 'Disca
         <SidebarTreeEditor v-else v-model="tree" @changed="dirty = true" @edit="openForm" @remove="remove" @add-child="(g) => openForm(null, g)" />
       </section>
 
-      <aside class="card h-fit min-w-0 p-4 lg:sticky lg:top-20">
+      <aside class="card h-fit min-w-0 p-4 xl:sticky xl:top-20">
         <div class="mb-3 flex items-center justify-between gap-2">
           <h2 class="text-sm font-semibold">Preview as</h2>
           <AppSelect v-model="previewRole" class="w-32" aria-label="Preview role" :options="[{ value: 'admin', label: 'Admin' }, { value: 'manager', label: 'Manager' }, { value: 'employee', label: 'Employee' }]" />

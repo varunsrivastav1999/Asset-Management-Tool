@@ -42,10 +42,12 @@ const ROLE_TONE = { admin: 'rose', manager: 'violet', employee: 'primary' }
               <EyeOff v-if="!item.is_active" class="h-3.5 w-3.5 text-muted" />
               <ExternalLink v-if="item.type === 'link'" class="h-3 w-3 text-muted" />
             </p>
-            <p class="truncate text-xs text-muted">{{ item.type === 'group' ? `Group · ${item.children?.length || 0} item(s)` : item.route || item.url }}</p>
+            <p class="truncate text-xs text-muted">
+              {{ item.type === 'group' ? `Group · ${item.children?.length || 0} item(s)` : item.route || item.url }}<span class="2xl:hidden"> · {{ (item.visible_roles || []).join(', ') }}</span>
+            </p>
           </div>
         </template>
-        <div class="hidden gap-1 md:flex">
+        <div class="hidden max-w-[40%] shrink flex-wrap justify-end gap-1 2xl:flex">
           <AppBadge v-for="r in item.visible_roles" :key="r" :tone="ROLE_TONE[r]">{{ r }}</AppBadge>
         </div>
         <div class="flex shrink-0">

@@ -15,7 +15,9 @@ export default defineConfig(({ mode }) => {
       vue(),
       tailwindcss(),
       VitePWA({
-        registerType: 'autoUpdate',
+        // 'prompt' + src/pwa.js: new versions are announced with a Reload button instead of staying cached.
+        registerType: 'prompt',
+        injectRegister: false,
         includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
         manifest: {
           name: appName,

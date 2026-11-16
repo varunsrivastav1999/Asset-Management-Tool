@@ -8,6 +8,7 @@ import App from './App.vue'
 import router from './router'
 import { http, tokenStore } from './api/http'
 import { loadAppConfig } from './config'
+import { setupAppUpdates } from './pwa'
 import { useAuthStore } from './stores/auth'
 import { useUiStore } from './stores/ui'
 
@@ -32,5 +33,6 @@ app.config.errorHandler = (err, _instance, info) => {
 }
 
 loadAppConfig(http)
+setupAppUpdates(useUiStore(pinia))
 router.isReady().then(() => sessionStorage.removeItem('chunk-reload'))
 app.mount('#app')

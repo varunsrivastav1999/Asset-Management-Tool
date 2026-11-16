@@ -105,6 +105,9 @@ services:
   worker:
     <<: *backend
     command: ["worker"]
+    environment:
+      <<: *backend-env
+      DB_POOL_MAX: "4"  # DB connections per process: api 2 x 6 + worker 4 + beat 2 stays well under Postgres' 40
     mem_limit: 384m
     healthcheck:
       test: ["CMD-SHELL", "celery -A config inspect ping --timeout 5 | grep -q pong"]
@@ -118,6 +121,9 @@ services:
   beat:
     <<: *backend
     command: ["beat"]
+    environment:
+      <<: *backend-env
+      DB_POOL_MAX: "2"
     mem_limit: 192m
     healthcheck: { disable: true }
     depends_on:

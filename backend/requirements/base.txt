@@ -137,6 +137,8 @@ psycopg==3.3.9
     # via -r requirements/base.in
 psycopg-binary==3.3.9
     # via psycopg
+psycopg-pool==3.3.3
+    # via psycopg
 pycparser==3.12
     # via cffi
 pyjwt==2.15.1
@@ -188,6 +190,7 @@ typing-extensions==4.16.0
     #   click-repl
     #   django-redis
     #   psycopg
+    #   psycopg-pool
     #   pyopenssl
     #   referencing
     #   twisted

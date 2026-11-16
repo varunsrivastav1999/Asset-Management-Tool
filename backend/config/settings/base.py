@@ -108,8 +108,19 @@ TEMPLATES = [
 DATABASES = {
     "default": env.db("DATABASE_URL", default="postgres://asset:asset@localhost:5432/asset"),
 }
-DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=60)
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
+# Connection pool (psycopg 3). Under ASGI every worker thread would otherwise keep its own persistent connection
+# and a burst of requests exhausts Postgres ("too many clients"); the pool bounds and shares connections per process.
+DB_POOL = env.bool("DB_POOL", default=True)
+if DB_POOL:
+    DATABASES["default"]["CONN_MAX_AGE"] = 0  # required with a pool: connections go back to it after each request
+    DATABASES["default"].setdefault("OPTIONS", {})["pool"] = {
+        "min_size": 1,
+        "max_size": env.int("DB_POOL_MAX", default=6),
+        "timeout": env.int("DB_POOL_TIMEOUT", default=10),
+    }
+else:
+    DATABASES["default"]["CONN_MAX_AGE"] = env.int("DB_CONN_MAX_AGE", default=0)
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "accounts.User"
